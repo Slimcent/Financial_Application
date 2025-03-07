@@ -6,12 +6,6 @@ import os
 # Load environment variables from .env file
 load_dotenv()
 
-# Debugging: Print out environment variables
-print("DB_HOST:", os.getenv("DB_HOST"))
-print("DB_NAME:", os.getenv("DB_NAME"))
-print("DB_PORT:", os.getenv("DB_PORT"))
-print("DB_USER:", os.getenv("DB_USER"))
-
 # Ensure DB_PORT is correctly retrieved before converting to int
 port = os.getenv("DB_PORT")
 
