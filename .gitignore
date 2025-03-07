@@ -1,0 +1,13 @@
+# created by virtualenv automatically
+
+# Ignore environment variables file
+.env
+
+# Ignore virtual environment
+venv/
+
+# Ignore PyCharm/JetBrains files
+.idea/
+
+# Ignore Python cache files
+__pycache__/
