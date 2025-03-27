@@ -1,3 +1,4 @@
+from aiomysql import DictCursor
 from Dtos.Request.AccountTypeRequest import AccountTypeRequest
 from Dtos.Response.AccountTypeResponse import AccountTypeResponse
 
@@ -6,32 +7,37 @@ class AccountTypeService:
     def __init__(self, _database_connection):
         self.database_connection = _database_connection
 
-    def get_all_account_types(self):
-        connection = self.database_connection.connect()
-        if not connection:
+    async def get_all_account_types(self):
+        try:
+            connection = await self.database_connection.get_connection()
+            if not connection:
+                print("Failed to get connection.")
+                return []
+
+            async with connection.cursor(DictCursor) as cursor:
+                await cursor.execute("SELECT * FROM AccountTypes")  # Main query
+                account_types = await cursor.fetchall()
+
+            await self.database_connection.release_connection(connection)
+
+            return [
+                AccountTypeResponse(account_type_id=row["Id"], name=row["Type"])
+                for row in account_types
+            ]
+        except Exception as e:
+            print(f"Error in get_all_account_types: {e}")
             return []
 
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM AccountTypes")
-        account_types = cursor.fetchall()
-        cursor.close()
-        self.database_connection.close()
-
-        return [
-            AccountTypeResponse(account_type_id=row["Id"], name=row["Type"])
-            for row in account_types
-        ]
-
-    def get_account_type_by_id(self, account_type_id: int):
-        connection = self.database_connection.connect()
+    async def get_account_type_by_id(self, account_type_id: int):
+        connection = await self.database_connection.get_connection()
         if not connection:
             return None
 
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM AccountTypes WHERE Id = %s", (account_type_id,))
-        account_type = cursor.fetchone()
-        cursor.close()
-        self.database_connection.close()
+        async with connection.cursor(DictCursor) as cursor:
+            await cursor.execute("SELECT * FROM AccountTypes WHERE Id = %s", (account_type_id,))
+            account_type = await cursor.fetchone()
+
+        await self.database_connection.release_connection(connection)
 
         if account_type:
             return AccountTypeResponse(
@@ -40,104 +46,97 @@ class AccountTypeService:
             )
         return None
 
-    def add_account_type(self, request: AccountTypeRequest):
-        connection = self.database_connection.connect()
+    async def add_account_type(self, request: AccountTypeRequest):
+        connection = await self.database_connection.get_connection()
         if not connection:
             return None
 
         try:
-            cursor = connection.cursor(dictionary=True)
+            async with connection.cursor(DictCursor) as cursor:
+                # Check if the name already exists
+                check_query = "SELECT * FROM AccountTypes WHERE Type = %s"
+                await cursor.execute(check_query, (request.name,))
+                existing_account_type = await cursor.fetchone()
 
-            # Check if the name already exists
-            check_query = "SELECT * FROM AccountTypes WHERE Type = %s"
-            cursor.execute(check_query, (request.name,))
-            existing_account_type = cursor.fetchone()
+                if existing_account_type:
+                    print("Account type already exists")
+                    return None
 
-            if existing_account_type:
-                print("Account type already exists")
-                return None
+                # Insert new account type
+                insert_query = "INSERT INTO AccountTypes (Type) VALUES (%s)"
+                await cursor.execute(insert_query, (request.name,))
+                await connection.commit()
 
-            # Insert new account type
-            insert_query = "INSERT INTO AccountTypes (Type) VALUES (%s)"
-            cursor.execute(insert_query, (request.name,))
-            connection.commit()
-
-            new_id = cursor.lastrowid
-            return AccountTypeResponse(account_type_id=new_id, name=request.name)
+                new_id = cursor.lastrowid
+                return AccountTypeResponse(account_type_id=new_id, name=request.name)
 
         except Exception as e:
             print("Error adding account type:", e)
-            connection.rollback()
+            await connection.rollback()
             return None
 
         finally:
-            cursor.close()
-            self.database_connection.close()
+            await self.database_connection.release_connection(connection)
 
-    def update_account_type(self, account_type_id: int, request: AccountTypeRequest):
-        connection = self.database_connection.connect()
+    async def update_account_type(self, account_type_id: int, request: AccountTypeRequest):
+        connection = await self.database_connection.get_connection()
         if not connection:
             return None
 
         try:
-            cursor = connection.cursor(dictionary=True)
+            async with connection.cursor(DictCursor) as cursor:
+                # Check if the account type exists
+                check_query = "SELECT * FROM AccountTypes WHERE Id = %s"
+                await cursor.execute(check_query, (account_type_id,))
+                existing_account_type = await cursor.fetchone()
 
-            # Check if the account type exists
-            check_query = "SELECT * FROM AccountTypes WHERE Id = %s"
-            cursor.execute(check_query, (account_type_id,))
-            existing_account_type = cursor.fetchone()
+                if not existing_account_type:
+                    print("Account type not found")
+                    return None
 
-            if not existing_account_type:
-                print("Account type not found")
-                return None
+                # Update the account type
+                update_query = "UPDATE AccountTypes SET Type = %s WHERE Id = %s"
+                await cursor.execute(update_query, (request.name, account_type_id))
+                await connection.commit()
 
-            # Update the account type
-            update_query = "UPDATE AccountTypes SET Type = %s WHERE Id = %s"
-            cursor.execute(update_query, (request.name, account_type_id))
-            connection.commit()
-
-            return AccountTypeResponse(account_type_id=account_type_id, name=request.name)
+                return AccountTypeResponse(account_type_id=account_type_id, name=request.name)
 
         except Exception as e:
             print("Error updating account type:", e)
-            connection.rollback()
+            await connection.rollback()
             return None
 
         finally:
-            cursor.close()
-            self.database_connection.close()
+            await self.database_connection.release_connection(connection)
 
-    def delete_account_type(self, account_type_id: int):
-        connection = self.database_connection.connect()
+    async def delete_account_type(self, account_type_id: int):
+        connection = await self.database_connection.get_connection()
         if not connection:
             return False
 
         try:
-            cursor = connection.cursor(dictionary=True)
+            async with connection.cursor(DictCursor) as cursor:
+                # Check if the account type exists
+                check_query = "SELECT * FROM AccountTypes WHERE Id = %s"
+                await cursor.execute(check_query, (account_type_id,))
+                existing_account_type = await cursor.fetchone()
 
-            # Check if the account type exists
-            check_query = "SELECT * FROM AccountTypes WHERE Id = %s"
-            cursor.execute(check_query, (account_type_id,))
-            existing_account_type = cursor.fetchone()
+                if not existing_account_type:
+                    print("Account type not found")
+                    return False
 
-            if not existing_account_type:
-                print("Account type not found")
-                return False  # Return False if not found
+                # Delete the account type
+                delete_query = "DELETE FROM AccountTypes WHERE Id = %s"
+                await cursor.execute(delete_query, (account_type_id,))
+                await connection.commit()
 
-            # Delete the account type
-            delete_query = "DELETE FROM AccountTypes WHERE Id = %s"
-            cursor.execute(delete_query, (account_type_id,))
-            connection.commit()
-
-            print(f"Account type with ID {account_type_id} deleted successfully")
-            return True
+                print(f"Account type with ID {account_type_id} deleted successfully")
+                return True
 
         except Exception as e:
             print("Error deleting account type:", e)
-            connection.rollback()
+            await connection.rollback()
             return False
 
         finally:
-            cursor.close()
-            self.database_connection.close()
-
+            await self.database_connection.release_connection(connection)

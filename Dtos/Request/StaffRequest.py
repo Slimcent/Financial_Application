@@ -1,5 +1,5 @@
 class StaffRequest:
-    def __init__(self, user_id: str, position: str):
-        self.user_id = user_id
+    def __init__(self, name: str, email: str, position: str):
+        self.name = name
+        self.email = email
         self.position = position
-
