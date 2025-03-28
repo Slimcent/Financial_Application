@@ -1,7 +1,9 @@
 class User:
-    def __init__(self, Id, UserId, Name, Email, Role):
+    def __init__(self, Id, UserId, LastName, FirstName, Email, RoleId, Password):
         self.Id = Id
         self.UserId = UserId
-        self.Name = Name
+        self.LastName = LastName
+        self.FirstName = FirstName
         self.Email = Email
-        self.Role = Role
+        self.Role = RoleId
+        self.Password = Password
