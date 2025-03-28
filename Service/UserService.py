@@ -1,5 +1,6 @@
 from aiomysql import DictCursor
 from Dtos.Request.UserRequest import UserRequest
+from Utility.Security import hash_password
 
 
 class UserService:
@@ -22,12 +23,15 @@ class UserService:
                     print("User with this email already exists")
                     return None  # Return None if user exists
 
+                # Hash the password before inserting it
+                hashed_password = hash_password(user_request.password)
+
                 # Insert new user
                 insert_query = "INSERT INTO Users (LastName, FirstName, Email, RoleId, Password) VALUES (%s, %s, %s, " \
                                "%s, %s) "
                 await cursor.execute(insert_query, (
                     user_request.last_name, user_request.first_name, user_request.email, user_request.role_id,
-                    user_request.password))
+                    hashed_password))
                 await connection.commit()
 
                 return cursor.lastrowid
