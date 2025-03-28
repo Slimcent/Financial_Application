@@ -1,7 +1,9 @@
+import logging
 import aiomysql
 from Dtos.Request.StaffRequest import StaffRequest
 from Dtos.Request.UserRequest import UserRequest
 from Infrastructure import AppConstants
+from SqlQueries.staff_sql_queries import STAFF_QUERIES
 
 
 class StaffService:
@@ -12,8 +14,10 @@ class StaffService:
 
     async def create_staff(self, staff_request: StaffRequest):
         user_request = UserRequest(
-            name=staff_request.name,
+            first_name=staff_request.first_name,
+            last_name=staff_request.last_name,
             email=staff_request.email,
+            password=staff_request.password,
             role_id=self.constants.StaffRoleId,
         )
 
@@ -22,19 +26,23 @@ class StaffService:
         if not user_id:
             raise ValueError("Failed to create user for staff")
 
-        connection = await self.database_connection.connect()
+        connection = await self.database_connection.get_connection()
         if not connection:
             return None
 
-        async with connection.cursor() as cursor:
-            insert_query = """
-                    INSERT INTO Staff (UserId, Position) 
-                    VALUES (%s, %s)
-                    """
-            await cursor.execute(insert_query, (user_id, staff_request.position))
-            await connection.commit()
+        try:
+            async with connection.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(STAFF_QUERIES["INSERT_NEW_STAFF"], (user_id, staff_request.position))
+                await connection.commit()
 
-            staff_id = cursor.lastrowid
+                staff_id = cursor.lastrowid
 
-        await connection.ensure_closed()
-        return staff_id
+            return staff_id
+
+        except Exception as e:
+            logging.error(f"Error creating staff: {e}", exc_info=True)
+            await connection.rollback()
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)

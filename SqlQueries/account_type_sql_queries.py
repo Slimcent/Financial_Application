@@ -1,0 +1,13 @@
+ACCOUNT_TYPE_QUERIES = {
+    "SELECT_ALL_ACCOUNT_TYPES": "SELECT * FROM AccountTypes",
+
+    "SELECT_ACCOUNT_TYPE_BY_ID": "SELECT * FROM AccountTypes WHERE Id = %s",
+
+    "SELECT_ACCOUNT_TYPE_BY_NAME": "SELECT * FROM AccountTypes WHERE Type = %s",
+
+    "INSERT_ACCOUNT_TYPE": "INSERT INTO AccountTypes (Type) VALUES (%s)",
+
+    "UPDATE_ACCOUNT_TYPE": "UPDATE AccountTypes SET Type = %s WHERE Id = %s",
+
+    "DELETE_ACCOUNT_TYPE": "DELETE FROM AccountTypes WHERE Id = %s"
+}
