@@ -1,4 +1,4 @@
-import logging
+from logger import logger
 from aiomysql import DictCursor
 from Dtos.Request.UserRequest import UserRequest
 from SqlQueries.user_sql_queries import USER_QUERIES
@@ -12,7 +12,7 @@ class UserService:
     async def create_user(self, user_request: UserRequest):
         connection = await self.database_connection.get_connection()
         if not connection:
-            logging.error("Database connection could not be established")
+            logger.error("Database connection could not be established")
             return None
 
         try:
@@ -22,13 +22,14 @@ class UserService:
                 existing_user = await cursor.fetchone()
 
                 if existing_user:
-                    logging.warning(f"User with email {user_request.email} already exists")
-                    return None  # Return None if user exists
+                    logger.warning(f"User with email {user_request.email} already exists")
+                    return None
 
                 # Hash the password before inserting it
                 hashed_password = hash_password(user_request.password)
 
                 # Insert new user
+                logger.info("Inserting into user table")
                 await cursor.execute(USER_QUERIES["INSERT_NEW_USER"], (
                     user_request.last_name,
                     user_request.first_name,
@@ -41,7 +42,7 @@ class UserService:
                 return cursor.lastrowid
 
         except Exception as e:
-            logging.error(f"Error creating user: {e}", exc_info=True)
+            logger.error(f"Error creating user: {e}", exc_info=True)
             await connection.rollback()
             return None
 

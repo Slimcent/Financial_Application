@@ -1,10 +1,14 @@
 import asyncio
 from Application.AccountTypesApplication import AccountTypesApplication
+from Application.StaffApplication import StaffApplication
 
 
 async def main():
-    applicationTypes = AccountTypesApplication()
-    await applicationTypes.run_application()
+    # accountType = AccountTypesApplication()
+    # await accountType.run_application()
 
+    staff = StaffApplication()
+    await staff.run_application()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

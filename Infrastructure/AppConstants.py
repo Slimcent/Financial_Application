@@ -1,2 +1,2 @@
-class Constants:
+class AppConstants:
     StaffRoleId = 2

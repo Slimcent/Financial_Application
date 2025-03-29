@@ -18,7 +18,7 @@ class AccountTypeService:
 
             async with connection.cursor(DictCursor) as cursor:
                 logger.info("Executing query: SELECT * FROM AccountTypes")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ALL_ACCOUNT_TYPES"])  # Use constant query
+                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ALL_ACCOUNT_TYPES"])
                 account_types = await cursor.fetchall()
 
             await self.database_connection.release_connection(connection)

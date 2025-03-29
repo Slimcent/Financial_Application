@@ -7,16 +7,14 @@ from Service.AccountTypeService import AccountTypeService
 
 class AccountTypesApplication:
     def __init__(self):
-        # Initialize the database connection and service
         self.database_connection = DatabaseConnection()
         self.service = AccountTypeService(self.database_connection)
 
     async def run_application(self):
-        # Perform the operations
         # await self.test_database_connection()
 
-        # await self.get_all_account_types()
-        await self.get_account_type_by_id(1)
+        await self.get_all_account_types()
+        # await self.get_account_type_by_id(1)
         # await self.create_account_type("Retirement")
         # await self.update_account_type(5, "Updated Retirement")
         # await self.delete_account_type(5)
@@ -84,11 +82,11 @@ class AccountTypesApplication:
 
 
 # Main function to run the application
-async def main():
-    app = AccountTypesApplication()  # Initialize the application
-    await app.run_application()  # Run the asynchronous operations
-
-
-# Entry point of the program
-if __name__ == "__main__":
-    asyncio.run(main())
+# async def main():
+#     app = AccountTypesApplication()
+#     await app.run_application()
+#
+#
+# # Entry point of the program
+# if __name__ == "__main__":
+#     asyncio.run(main())
