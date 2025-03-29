@@ -27,6 +27,7 @@ def _map_to_user_response(staff_records):
     for row in staff_records:
         user_response = UserResponse(
             user_id=row["Id"],
+            staff_id=row["Id"],
             last_name=row["LastName"],
             first_name=row["FirstName"],
             email=row["Email"],
@@ -111,3 +112,7 @@ class StaffService:
 
         finally:
             await self.database_connection.release_connection(connection)
+
+    async def toggle_staff_active_status(self, user_id: int):
+        logger.info(f"About to call user service to toggle staff status with the user id {user_id}")
+        return await self.user_service.toggle_user_active_status(user_id)

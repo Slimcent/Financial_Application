@@ -14,7 +14,8 @@ class StaffApplication:
     async def run_application(self):
         # await self.test_database_connection()
         # await self.create_staff("Koke", "Bula", "bula@yopmail.com", "Engineer", "obinna")
-        await self.get_all_staff()
+        # await self.get_all_staff()
+        await self.toggle_staff_active_status(1)
 
     async def create_staff(self, last_name: str, first_name: str, email: str, position: str, password: str):
         logger.info(f"Attempting to create new staff: {last_name} {first_name}, Email: {email}, Position: {position}")
@@ -46,6 +47,7 @@ class StaffApplication:
         for user_response in staff_list:
             print(
                 f"User Id: {user_response.user_id}, "
+                f"Staff Id: {user_response.staff_id}, "
                 f"Name: {user_response.first_name} {user_response.last_name}, "
                 f"Email: {user_response.email}, Position: {user_response.position}, "
                 f"Role Id: {user_response.role_id}, "
@@ -54,6 +56,16 @@ class StaffApplication:
                 f"CreateAt: {user_response.created_at}"
             )
         print()
+
+    async def toggle_staff_active_status(self, user_id: int):
+        logger.info(f"Toggling active status for staff with User ID: {user_id}")
+
+        success = await self.service.toggle_staff_active_status(user_id)
+
+        if success:
+            print(f"Successfully toggled active status for staff with User ID: {user_id}")
+        else:
+            logger.warning(f"Failed to toggle active status for staff with User ID: {user_id}")
 
     async def test_database_connection(self):
         logger.info("Testing database connection...")

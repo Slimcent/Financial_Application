@@ -48,3 +48,39 @@ class UserService:
 
         finally:
             await self.database_connection.release_connection(connection)
+
+    async def toggle_user_active_status(self, user_id: int):
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+                await cursor.execute(USER_QUERIES["GET_USER_ACTIVE_STATUS"], (user_id,))
+                user = await cursor.fetchone()
+
+                if not user:
+                    logger.warning(f"User with ID {user_id} not found.")
+                    return None
+
+                logger.info(f"Found {user['LastName']} {user['FirstName']}")
+                active_status = user["Active"] if "Active" in user else None
+
+                new_status = 0 if active_status == 1 else 1
+
+                # Update the active status
+                logger.info(f"Updating the status of {user['LastName']} {user['FirstName']} "
+                            f"with status {user['Active'] == 1}")
+                await cursor.execute(USER_QUERIES["TOGGLE_USER_ACTIVE_STATUS"], (new_status, user_id))
+                await connection.commit()
+
+                logger.info(f"User ID {user_id} active status changed to {bool(new_status)}.")
+                return bool(new_status)
+
+        except Exception as e:
+            logger.error(f"Error toggling active status for user {user_id}: {e}", exc_info=True)
+            await connection.rollback()
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)
