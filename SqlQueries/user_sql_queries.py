@@ -18,5 +18,9 @@ USER_QUERIES = {
         UPDATE Users 
         SET LastName = %s, FirstName = %s, Email = %s 
         WHERE Id = %s
+    """,
+
+    "DELETE_USER": """
+        DELETE FROM Users WHERE Id = %s
     """
 }

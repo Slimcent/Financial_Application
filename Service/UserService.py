@@ -121,3 +121,38 @@ class UserService:
         finally:
             await self.database_connection.release_connection(connection)
 
+    async def delete_user(self, user_id: int):
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+                logger.info(f"Checking if the user with user id {user_id} exists")
+                await cursor.execute(USER_QUERIES["GET_USER_BY_ID"], (user_id,))
+                user = await cursor.fetchone()
+
+                if not user:
+                    logger.warning(f"User with Id {user_id} not found.")
+                    return None
+
+                logger.info(f"Deleting user {user['FirstName']} {user['LastName']} (Id: {user_id})")
+
+                # Begin transaction
+                await connection.begin()
+
+                await cursor.execute(USER_QUERIES["DELETE_USER"], (user_id,))
+
+                # Commit transaction
+                await connection.commit()
+
+                logger.info(f"User with Id {user_id} successfully deleted.")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error deleting user with ID {user_id}: {e}", exc_info=True)
+            await connection.rollback()
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)

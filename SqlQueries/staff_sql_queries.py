@@ -33,5 +33,9 @@ STAFF_QUERIES = {
         UPDATE Staff 
         SET Position = %s 
         WHERE UserId = %s
+    """,
+
+    "DELETE_STAFF": """
+        DELETE FROM Staff WHERE UserId = %s
     """
 }

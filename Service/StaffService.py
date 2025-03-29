@@ -197,3 +197,46 @@ class StaffService:
 
         finally:
             await self.database_connection.release_connection(connection)
+
+    async def delete_staff(self, user_id: int):
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+                await cursor.execute(STAFF_QUERIES["GET_STAFF_BY_USER_ID"], (user_id,))
+                staff = await cursor.fetchone()
+
+                if not staff:
+                    logger.warning(f"Staff with User Id {user_id} not found.")
+                    return None
+
+                logger.info(f"Deleting staff {staff['FirstName']} {staff['LastName']} (Id: {user_id})")
+
+                # Begin transaction
+                await connection.begin()
+
+                await cursor.execute(STAFF_QUERIES["DELETE_STAFF"], (user_id,))
+                logger.info(f"Staff with user id {user_id} deleted from the staff table")
+
+                logger.info("Starting to delete staff from the user table")
+                result = await self.user_service.delete_user(user_id)
+
+                if not result:
+                    raise Exception(f"Failed to delete user with Id {user_id}")
+
+                # Commit transaction
+                await connection.commit()
+
+                logger.info(f"Staff with user Id {user_id} successfully deleted.")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error deleting staff with Id {user_id}: {e}", exc_info=True)
+            await connection.rollback()
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)
+
