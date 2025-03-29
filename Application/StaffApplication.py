@@ -15,10 +15,10 @@ class StaffApplication:
     async def run_application(self):
         # await self.test_database_connection()
         # await self.create_staff("Kim", "Joy", "kim@yopmail.com", "Lead", "obinna")
-        # await self.get_all_staff()
+        await self.get_all_staff()
         # await self.toggle_staff_active_status(1)
         # await self.get_staff_details(1)
-        await self.delete_staff(4)
+        # await self.delete_staff(4)
         # await self.update_staff_details(2, staff_request=StaffRequest(
         #     last_name="Doe",
         #     first_name="John",
