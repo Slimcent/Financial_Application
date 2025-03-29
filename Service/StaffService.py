@@ -21,9 +21,6 @@ async def _fetch_staff_data(connection):
 
 
 def _map_to_user_response(staff_records):
-    """
-    Maps the staff data to a list of UserResponse objects.
-    """
     user_responses = []
     for row in staff_records:
         user_response = UserResponse(
@@ -155,7 +152,7 @@ class StaffService:
                 return True
 
         except Exception as e:
-            logger.error(f"Error updating staff with ID {user_id}: {e}", exc_info=True)
+            logger.error(f"Error updating staff with Id {user_id}: {e}", exc_info=True)
             await connection.rollback()
             return None
 
@@ -192,7 +189,7 @@ class StaffService:
                 return user_response
 
         except Exception as e:
-            logger.error(f"Error fetching staff with ID {user_id}: {e}", exc_info=True)
+            logger.error(f"Error fetching staff with Id {user_id}: {e}", exc_info=True)
             return None
 
         finally:
