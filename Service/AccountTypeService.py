@@ -1,8 +1,8 @@
-from SqlQueries.account_type_sql_queries import ACCOUNT_TYPE_QUERIES
 from logger import logger
 from aiomysql import DictCursor
 from Dtos.Request.AccountTypeRequest import AccountTypeRequest
 from Dtos.Response.AccountTypeResponse import AccountTypeResponse
+from SqlQueries.account_type_sql_queries import ACCOUNT_TYPE_QUERIES
 
 
 class AccountTypeService:

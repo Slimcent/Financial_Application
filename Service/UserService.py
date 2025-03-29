@@ -1,9 +1,9 @@
-from Dtos.Request.UpdateUserRequest import UpdateUserRequest
 from logger import logger
 from aiomysql import DictCursor
+from Utility.Security import hash_password
 from Dtos.Request.UserRequest import UserRequest
 from SqlQueries.user_sql_queries import USER_QUERIES
-from Utility.Security import hash_password
+from Dtos.Request.UpdateUserRequest import UpdateUserRequest
 
 
 class UserService:
