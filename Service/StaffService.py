@@ -1,5 +1,6 @@
 from aiomysql import DictCursor
 
+from Dtos.Request.UpdateUserRequest import UpdateUserRequest
 from logger import logger
 import aiomysql
 from Dtos.Request.StaffRequest import StaffRequest
@@ -116,3 +117,83 @@ class StaffService:
     async def toggle_staff_active_status(self, user_id: int):
         logger.info(f"About to call user service to toggle staff status with the user id {user_id}")
         return await self.user_service.toggle_user_active_status(user_id)
+
+    async def update_staff(self, user_id: int, staff_request: StaffRequest):
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+                # Start a transaction
+                await connection.begin()
+
+                # Check if the staff exists
+                await cursor.execute(STAFF_QUERIES["GET_STAFF_BY_USER_ID"], (user_id,))
+                staff = await cursor.fetchone()
+
+                if not staff:
+                    logger.warning(f"Staff with User Id {user_id} not found.")
+                    return None
+
+                logger.info(f"Beginning to update staff {staff['FirstName']} {staff['LastName']}")
+
+                await cursor.execute(STAFF_QUERIES["UPDATE_STAFF"], (staff_request.position, user_id))
+                logger.info("Staff table updated")
+
+                logger.info("Starting to update staff details in the user table")
+                user_update_request = UpdateUserRequest(
+                    last_name=staff_request.last_name,
+                    first_name=staff_request.first_name,
+                    email=staff_request.email,
+                )
+                await self.user_service.update_user(user_id, user_update_request)
+
+                # Commit the transaction
+                await connection.commit()
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Error updating staff with ID {user_id}: {e}", exc_info=True)
+            await connection.rollback()
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)
+
+    async def get_staff_by_id(self, user_id: int) -> UserResponse | None:
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+                await cursor.execute(STAFF_QUERIES["GET_STAFF_BY_USER_ID"], (user_id,))
+                staff = await cursor.fetchone()
+
+                if not staff:
+                    logger.warning(f"Staff with User Id {user_id} not found.")
+                    return None
+
+                user_response = UserResponse(
+                    user_id=staff["Id"],
+                    staff_id=staff["StaffId"],
+                    last_name=staff["LastName"],
+                    first_name=staff["FirstName"],
+                    email=staff["Email"],
+                    position=staff["Position"],
+                    role_id=staff["RoleId"],
+                    role_name=staff["Name"],
+                    active=staff["Active"] == 1,
+                    created_at=staff["CreatedAt"] if staff["CreatedAt"] else None,
+                )
+
+                return user_response
+
+        except Exception as e:
+            logger.error(f"Error fetching staff with ID {user_id}: {e}", exc_info=True)
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)

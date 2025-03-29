@@ -18,7 +18,7 @@ class UserResponse:
         created_at: datetime = None
     ):
         self.user_id = user_id
-        self.staff_id = user_id
+        self.staff_id = staff_id
         self.last_name = last_name
         self.first_name = first_name
         self.email = email

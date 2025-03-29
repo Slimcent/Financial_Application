@@ -1,3 +1,4 @@
+from Dtos.Response.UserResponse import UserResponse
 from Service.UserService import UserService
 from logger import logger
 from Dtos.Request.StaffRequest import StaffRequest
@@ -15,7 +16,15 @@ class StaffApplication:
         # await self.test_database_connection()
         # await self.create_staff("Koke", "Bula", "bula@yopmail.com", "Engineer", "obinna")
         # await self.get_all_staff()
-        await self.toggle_staff_active_status(1)
+        # await self.toggle_staff_active_status(1)
+        await self.get_staff_details(1)
+        # await self.update_staff_details(2, staff_request=StaffRequest(
+        #     last_name="Doe",
+        #     first_name="John",
+        #     email="john.doe@yopmail.com",
+        #     position="Lead",
+        #     password=None
+        # ))
 
     async def create_staff(self, last_name: str, first_name: str, email: str, position: str, password: str):
         logger.info(f"Attempting to create new staff: {last_name} {first_name}, Email: {email}, Position: {position}")
@@ -73,7 +82,40 @@ class StaffApplication:
         connection = await self.database_connection.get_connection()
 
         if connection:
-            print("Database connection successful.")
+            logger.info("Database connection successful.")
             await self.database_connection.release_connection(connection)
         else:
             logger.error("Database connection failed.")
+
+    async def update_staff_details(self, user_id: int, staff_request: StaffRequest):
+        logger.info(f"Starting the update of staff with the user id {user_id}")
+        result = await self.service.update_staff(user_id, staff_request)
+
+        if result:
+            logger.info(f"Staff with User ID {user_id} updated successfully.")
+        else:
+            logger.warning(f"Failed to update staff with User ID {user_id}.")
+
+        return result
+
+    async def get_staff_details(self, user_id: int) -> UserResponse | None:
+        logger.info(f"getting staff details with the user id {user_id}")
+        staff = await self.service.get_staff_by_id(user_id)
+
+        if not staff:
+            logger.warning(f"Staff with User ID {user_id} not found.")
+            return None
+
+        print(
+            f"Retrieved Staff Details:\n"
+            f"Name: {staff.first_name} {staff.last_name}\n"
+            f"User Id: {staff.user_id}\n"
+            f"Staff Id: {staff.staff_id}\n"
+            f"Email: {staff.email}\n"
+            f"Position: {staff.position}\n"
+            f"Role: {staff.role_name} (Role Id: {staff.role_id})\n"
+            f"Active: {staff.active}\n"
+            f"Created At: {staff.created_at}"
+        )
+
+        return staff

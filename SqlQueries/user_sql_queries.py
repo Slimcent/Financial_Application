@@ -9,4 +9,14 @@ USER_QUERIES = {
     "GET_USER_ACTIVE_STATUS": "SELECT Id, LastName, FirstName, Active FROM Users WHERE Id = %s",
 
     "TOGGLE_USER_ACTIVE_STATUS": "UPDATE Users SET Active = %s WHERE Id = %s",
+
+    "GET_USER_BY_ID": """
+        SELECT * FROM Users WHERE Id = %s
+    """,
+
+    "UPDATE_USER": """
+        UPDATE Users 
+        SET LastName = %s, FirstName = %s, Email = %s 
+        WHERE Id = %s
+    """
 }

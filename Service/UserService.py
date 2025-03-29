@@ -1,3 +1,4 @@
+from Dtos.Request.UpdateUserRequest import UpdateUserRequest
 from logger import logger
 from aiomysql import DictCursor
 from Dtos.Request.UserRequest import UserRequest
@@ -84,3 +85,39 @@ class UserService:
 
         finally:
             await self.database_connection.release_connection(connection)
+
+    async def update_user(self, user_id: int, update_request: UpdateUserRequest):
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor() as cursor:
+                # Start a transaction
+                await connection.begin()
+
+                # Check if the user exists
+                await cursor.execute(USER_QUERIES["GET_USER_BY_ID"], (user_id,))
+                user = await cursor.fetchone()
+
+                if not user:
+                    logger.warning(f"User with ID {user_id} not found.")
+                    return None
+
+                # Update the user fields: last_name, first_name, email
+                await cursor.execute(USER_QUERIES["UPDATE_USER"], (update_request.last_name, update_request.first_name,
+                                                                   update_request.email, user_id))
+
+                # Commit the transaction
+                await connection.commit()
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Error updating user with ID {user_id}: {e}", exc_info=True)
+            await connection.rollback()
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)
+
