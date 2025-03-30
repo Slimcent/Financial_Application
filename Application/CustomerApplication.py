@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 
 from Dtos.Request.CustomerRequest import CustomerRequest
 from Dtos.Response.UserResponse import UserResponse
@@ -30,6 +30,8 @@ class CustomerApplication:
         # ))
 
         # await self.delete_customer(15)
+        # await self.get_customer_details(8)
+        # await self.add_or_update_customer_account_type(7, 2)
         customers = await self.get_all_customers()
         if customers:
             for customer in customers:
@@ -63,8 +65,8 @@ class CustomerApplication:
         else:
             logger.warning(f"Failed to delete customer {user_id}.")
 
-    async def get_all_customers(self) -> Optional[List[UserResponse]]:
-        logger.info("Fetching all customers...")
+    async def get_all_customers(self) -> None | list[Any] | list[dict[str, str | None | int | bool | Any]]:
+        logger.info("Getting all customers...")
 
         customers = await self.customer_service.get_all_customers()
 
@@ -84,7 +86,7 @@ class CustomerApplication:
                 "email": customer.email,
                 "role_id": customer.role_id,
                 "role_name": customer.role_name,
-                "account_type": customer.account_type,
+                "account_types": customer.account_types,  # Expecting a list now
                 "balance": customer.balance,
                 "active": customer.active,
                 "created_at": customer.created_at.strftime("%Y-%m-%d %H:%M:%S") if customer.created_at else None
@@ -93,3 +95,39 @@ class CustomerApplication:
         ]
 
         return customer_responses
+
+    async def get_customer_details(self, user_id: int) -> UserResponse | None:
+        logger.info(f"getting customer details with the user id {user_id}")
+        customer = await self.customer_service.get_customer_by_id(user_id)
+
+        if not customer:
+            logger.warning(f"Customer with User ID {user_id} not found.")
+            return None
+
+        account_types = [
+            f"{account['account_type']} (Id: {account['account_type_id']})"
+            for account in customer.account_types
+        ]
+
+        print(
+            f"Retrieved Customer Details:\n"
+            f"Name: {customer.first_name} {customer.last_name}\n"
+            f"User Id: {customer.user_id}\n"
+            f"Email: {customer.email}\n"
+            f"Role: {customer.role_name} (Role Id: {customer.role_id})\n"
+            f"Active: {customer.active}\n"
+            f"Created At: {customer.created_at}\n"
+            f"Account Types: {', '.join(account_types)}"
+        )
+
+        return customer
+
+    async def add_or_update_customer_account_type(self, user_id: int, account_type_id: int):
+        success = await self.customer_service.add_or_update_account_type(user_id, account_type_id)
+
+        if success:
+            logger.info(f"Successfully added/updated account type {account_type_id} for user {user_id}.")
+            print(f"Account type {account_type_id} successfully added/updated for user {user_id}.")
+        else:
+            logger.error(f"Failed to add/update account type {account_type_id} for user {user_id}.")
+            print(f"Failed to update account type for user {user_id}.")
