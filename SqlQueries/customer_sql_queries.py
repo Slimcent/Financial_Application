@@ -31,6 +31,23 @@ CUSTOMER_QUERIES = {
 
     "DELETE_CUSTOMER": """
         DELETE FROM Customers WHERE UserId = %s
-    """
+    """,
 
+    "GET_ALL_CUSTOMERS": """
+        SELECT 
+            c.Id AS CustomerId, 
+            c.UserId, 
+            c.AccountTypeId, 
+            c.Balance, 
+            u.FirstName, 
+            u.LastName, 
+            u.Email, 
+            u.Active, 
+            r.Name AS RoleName,
+            r.Id AS RoleId,
+            u.CreatedAt
+        FROM Customers c
+        JOIN Users u ON u.Id = c.UserId
+        LEFT JOIN Roles r ON u.RoleId = r.Id
+    """
 }

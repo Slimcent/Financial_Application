@@ -1,11 +1,13 @@
+from logger import logger
+from datetime import datetime
 from aiomysql import DictCursor
-
+from typing import List, Optional
+from Dtos.Request.UserRequest import UserRequest
+from Dtos.Response.UserResponse import UserResponse
+from Infrastructure.AppConstants import AppConstants
 from Dtos.Request.CustomerRequest import CustomerRequest
 from Dtos.Request.UpdateUserRequest import UpdateUserRequest
-from Dtos.Request.UserRequest import UserRequest
-from Infrastructure.AppConstants import AppConstants
 from SqlQueries.customer_sql_queries import CUSTOMER_QUERIES
-from logger import logger
 
 
 class CustomerService:
@@ -115,6 +117,48 @@ class CustomerService:
 
         except Exception as e:
             logger.error(f"Error deleting customer with UserId {user_id}: {e}", exc_info=True)
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)
+
+    async def get_all_customers(self) -> Optional[List[UserResponse]]:
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+                await cursor.execute(CUSTOMER_QUERIES["GET_ALL_CUSTOMERS"])
+                customers = await cursor.fetchall()
+
+                if not customers:
+                    logger.info("No customers found.")
+                    return []
+
+                customer_list = [
+                    UserResponse(
+                        user_id=customer["UserId"],
+                        staff_id=None,
+                        first_name=customer["FirstName"],
+                        last_name=customer["LastName"],
+                        email=customer["Email"],
+                        position=None,
+                        role_id=customer["RoleId"],
+                        role_name=customer["RoleName"],
+                        account_type=customer["AccountTypeId"],
+                        balance=str(customer["Balance"]),
+                        active=customer["Active"] == 1,
+                        created_at=customer["CreatedAt"] if isinstance(customer["CreatedAt"], datetime) else None,
+                    )
+                    for customer in customers
+                ]
+
+                logger.info(f"Retrieved {len(customer_list)} customers.")
+                return customer_list
+
+        except Exception as e:
+            logger.error(f"Error retrieving customers: {e}", exc_info=True)
             return None
 
         finally:
