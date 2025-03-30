@@ -1,7 +1,7 @@
 CUSTOMER_QUERIES = {
     "CREATE_CUSTOMER": """
-        INSERT INTO Customers (UserId, AccountTypeId, Balance) 
-        VALUES (%s, %s, %s)
+        INSERT INTO Customers (UserId, AccountTypeId, Balance, AccountNumber) 
+        VALUES (%s, %s, %s, %s)
     """,
 
     "GET_Single_CUSTOMER": """

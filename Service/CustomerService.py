@@ -1,3 +1,4 @@
+from Utility.AccountNumber import generate_account_number
 from logger import logger
 from datetime import datetime
 from aiomysql import DictCursor
@@ -26,6 +27,8 @@ class CustomerService:
             async with connection.cursor() as cursor:
                 await connection.begin()
 
+                account_number = await generate_account_number(customer_request.account_Type_id)
+
                 user_request = UserRequest(
                     last_name=customer_request.last_name,
                     first_name=customer_request.first_name,
@@ -43,7 +46,7 @@ class CustomerService:
                 logger.info(f"Created user with Id: {user_id}")
 
                 await cursor.execute(CUSTOMER_QUERIES["CREATE_CUSTOMER"],
-                                     (user_id, customer_request.account_Type_id, 0.0))
+                                     (user_id, customer_request.account_Type_id, 0.0, account_number))
 
                 await connection.commit()
 

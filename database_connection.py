@@ -1,6 +1,7 @@
+import os
 import aiomysql
 from dotenv import load_dotenv
-import os
+from Infrastructure.AppConstants import AppConstants
 
 load_dotenv()
 
@@ -12,7 +13,7 @@ class DatabaseConnection:
         self.database = os.getenv("DB_NAME")
         self.user = os.getenv("DB_USER")
         self.password = os.getenv("DB_PASSWORD")
-        self.port = int(os.getenv("DB_PORT") or 3306)
+        self.port = int(os.getenv("DB_PORT") or AppConstants.DatabasePortNumber)
 
     async def connect(self):
         """Asynchronously establishes a connection pool to the database."""
