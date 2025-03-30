@@ -30,7 +30,7 @@ CUSTOMER_QUERIES = {
     """,
 
     "DELETE_CUSTOMER": """
-        DELETE FROM Customer WHERE UserId = %s
+        DELETE FROM Customers WHERE UserId = %s
     """
 
 }

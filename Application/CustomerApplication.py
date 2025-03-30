@@ -12,19 +12,21 @@ class CustomerApplication:
         self.customer_service = CustomerService(self.database_connection, self.user_service)
 
     async def run_application(self):
-        #     await self.create_customer(customer_request=CustomerRequest(
-        #         last_name="Mendy",
-        #         first_name="Mal",
-        #         email="mendy@yopmail.com",
-        #         account_Type_Id=1
-        #     ))
+        # await self.create_customer(customer_request=CustomerRequest(
+        #     last_name="Mendy",
+        #     first_name="Mal",
+        #     email="mendy@yopmail.com",
+        #     account_Type_Id=1
+        # ))
 
-        await self.update_customer(9, customer_request=CustomerRequest(
-            last_name="Ebus",
-            first_name="Rhema",
-            email="ebus@yopmail.com",
-            account_Type_Id=None
-        ))
+        # await self.update_customer(9, customer_request=CustomerRequest(
+        #     last_name="Ebus",
+        #     first_name="Rhema",
+        #     email="ebus@yopmail.com",
+        #     account_Type_Id=None
+        # ))
+
+        await self.delete_customer(15)
 
     async def create_customer(self, customer_request: CustomerRequest):
         logger.info(f"Starting to create customer {customer_request.email}")
@@ -45,3 +47,11 @@ class CustomerApplication:
             logger.warning(f"Failed to update staff with User ID {user_id}.")
 
         return result
+
+    async def delete_customer(self, user_id: int):
+        logger.info(f"Starting to delete customer with user id {user_id}")
+        result = await self.customer_service.delete_customer(user_id)
+        if result:
+            logger.info(f"Customer with user id {user_id} deleted successfully.")
+        else:
+            logger.warning(f"Failed to delete customer {user_id}.")

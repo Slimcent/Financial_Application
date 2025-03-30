@@ -90,3 +90,32 @@ class CustomerService:
 
         finally:
             await self.database_connection.release_connection(connection)
+
+    async def delete_customer(self, user_id: int):
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+
+                await cursor.execute(CUSTOMER_QUERIES["GET_CUSTOMER_BY_USER_ID"], (user_id,))
+                customer = await cursor.fetchone()
+
+                if not customer:
+                    logger.warning(f"Customer with UserId {user_id} not found.")
+                    return None
+
+                await cursor.execute(CUSTOMER_QUERIES["DELETE_CUSTOMER"], (user_id,))
+                logger.info(f"Successfully deleted customer with UserId {user_id}.")
+
+                await self.user_service.delete_user(user_id)
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Error deleting customer with UserId {user_id}: {e}", exc_info=True)
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)
