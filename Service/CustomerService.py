@@ -1,4 +1,7 @@
+from aiomysql import DictCursor
+
 from Dtos.Request.CustomerRequest import CustomerRequest
+from Dtos.Request.UpdateUserRequest import UpdateUserRequest
 from Dtos.Request.UserRequest import UserRequest
 from Infrastructure.AppConstants import AppConstants
 from SqlQueries.customer_sql_queries import CUSTOMER_QUERIES
@@ -49,6 +52,40 @@ class CustomerService:
         except Exception as e:
             logger.error(f"Error creating customer: {e}", exc_info=True)
             await connection.rollback()
+            return None
+
+        finally:
+            await self.database_connection.release_connection(connection)
+
+    async def update_customer(self, user_id: int, customer_request: CustomerRequest):
+        connection = await self.database_connection.get_connection()
+        if not connection:
+            return None
+
+        try:
+            async with connection.cursor(DictCursor) as cursor:
+                await cursor.execute(CUSTOMER_QUERIES["GET_CUSTOMER_BY_USER_ID"], (user_id,))
+                customer = await cursor.fetchone()
+
+                if not customer:
+                    logger.warning(f"Customer with UserId {user_id} not found.")
+                    return None
+
+                logger.info(f"Updating user details for customer with UserId {user_id}.")
+
+                user_update_request = UpdateUserRequest(
+                    last_name=customer_request.last_name,
+                    first_name=customer_request.first_name,
+                    email=customer_request.email,
+                )
+
+                await self.user_service.update_user(user_id, user_update_request)
+
+                logger.info(f"Successfully updated customer {user_id}.")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error updating customer {user_id}: {e}", exc_info=True)
             return None
 
         finally:

@@ -12,11 +12,18 @@ class CustomerApplication:
         self.customer_service = CustomerService(self.database_connection, self.user_service)
 
     async def run_application(self):
-        await self.create_customer(customer_request=CustomerRequest(
-            last_name="Mendy",
-            first_name="Mal",
-            email="mendy@yopmail.com",
-            account_Type_Id=1
+        #     await self.create_customer(customer_request=CustomerRequest(
+        #         last_name="Mendy",
+        #         first_name="Mal",
+        #         email="mendy@yopmail.com",
+        #         account_Type_Id=1
+        #     ))
+
+        await self.update_customer(9, customer_request=CustomerRequest(
+            last_name="Ebus",
+            first_name="Rhema",
+            email="ebus@yopmail.com",
+            account_Type_Id=None
         ))
 
     async def create_customer(self, customer_request: CustomerRequest):
@@ -27,3 +34,14 @@ class CustomerApplication:
             logger.info(f"Customer created successfully with User Id: {result}")
         else:
             logger.warning("Failed to create customer.")
+
+    async def update_customer(self, user_id: int, customer_request: CustomerRequest):
+        logger.info(f"Starting the update of customer with the user id {user_id}")
+        result = await self.customer_service.update_customer(user_id, customer_request)
+
+        if result:
+            logger.info(f"Staff with User ID {user_id} updated successfully.")
+        else:
+            logger.warning(f"Failed to update staff with User ID {user_id}.")
+
+        return result
