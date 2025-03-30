@@ -2,13 +2,12 @@ import aiomysql
 from dotenv import load_dotenv
 import os
 
-# Load .env file
 load_dotenv()
 
 
 class DatabaseConnection:
     def __init__(self):
-        self.pool = None  # Using connection pool
+        self.pool = None
         self.host = os.getenv("DB_HOST")
         self.database = os.getenv("DB_NAME")
         self.user = os.getenv("DB_USER")
@@ -43,9 +42,9 @@ class DatabaseConnection:
 
     async def get_connection(self):
         """Get a connection from the pool."""
-        if not self.pool:  # Ensure pool is initialized
+        if not self.pool:
             print("Database pool is not initialized. Attempting to connect...")
-            await self.connect()  # Initialize pool if it's None
+            await self.connect()
 
         return await self.pool.acquire() if self.pool else None
 

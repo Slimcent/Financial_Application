@@ -1,11 +1,10 @@
-from typing import Optional, List, Any, Dict
-
-from Dtos.Request.CustomerRequest import CustomerRequest
-from Dtos.Response.UserResponse import UserResponse
-from Service.CustomerService import CustomerService
-from Service.UserService import UserService
-from database_connection import DatabaseConnection
 from logger import logger
+from Service.UserService import UserService
+from typing import Optional, List, Any, Dict
+from database_connection import DatabaseConnection
+from Service.CustomerService import CustomerService
+from Dtos.Response.UserResponse import UserResponse
+from Dtos.Request.CustomerRequest import CustomerRequest
 
 
 class CustomerApplication:
@@ -86,7 +85,7 @@ class CustomerApplication:
                 "email": customer.email,
                 "role_id": customer.role_id,
                 "role_name": customer.role_name,
-                "account_types": customer.account_types,  # Expecting a list now
+                "account_types": customer.account_types,
                 "balance": customer.balance,
                 "active": customer.active,
                 "created_at": customer.created_at.strftime("%Y-%m-%d %H:%M:%S") if customer.created_at else None

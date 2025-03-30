@@ -104,11 +104,9 @@ class UserService:
                     logger.warning(f"User with ID {user_id} not found.")
                     return None
 
-                # Update the user fields: last_name, first_name, email
                 await cursor.execute(USER_QUERIES["UPDATE_USER"], (update_request.last_name, update_request.first_name,
                                                                    update_request.email, user_id))
 
-                # Commit the transaction
                 await connection.commit()
 
                 return True

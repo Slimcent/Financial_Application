@@ -24,7 +24,6 @@ class CustomerService:
 
         try:
             async with connection.cursor() as cursor:
-                # Begin transaction
                 await connection.begin()
 
                 user_request = UserRequest(
@@ -46,7 +45,6 @@ class CustomerService:
                 await cursor.execute(CUSTOMER_QUERIES["CREATE_CUSTOMER"],
                                      (user_id, customer_request.account_Type_id, 0.0))
 
-                # Commit transaction
                 await connection.commit()
 
                 logger.info(f"Customer created successfully for User Id {user_id}")

@@ -114,7 +114,6 @@ class StaffService:
                 )
                 await self.user_service.update_user(user_id, user_update_request)
 
-                # Commit the transaction
                 await connection.commit()
 
                 return True
@@ -179,7 +178,6 @@ class StaffService:
 
                 logger.info(f"Deleting staff {staff['FirstName']} {staff['LastName']} (Id: {user_id})")
 
-                # Begin transaction
                 await connection.begin()
 
                 await cursor.execute(STAFF_QUERIES["DELETE_STAFF"], (user_id,))
@@ -191,7 +189,6 @@ class StaffService:
                 if not result:
                     raise Exception(f"Failed to delete user with Id {user_id}")
 
-                # Commit transaction
                 await connection.commit()
 
                 logger.info(f"Staff with user Id {user_id} successfully deleted.")
@@ -230,8 +227,6 @@ def _map_to_user_response(staff_records):
             role_name=row["Name"],
             active=row["Active"] == 1,
             created_at=row["CreatedAt"],
-            account_type=None,
-            balance=None
         )
         user_responses.append(user_response)
     return user_responses

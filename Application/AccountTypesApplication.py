@@ -1,8 +1,8 @@
 import asyncio
 from logger import logger
-from Dtos.Request.AccountTypeRequest import AccountTypeRequest
 from database_connection import DatabaseConnection
 from Service.AccountTypeService import AccountTypeService
+from Dtos.Request.AccountTypeRequest import AccountTypeRequest
 
 
 class AccountTypesApplication:
