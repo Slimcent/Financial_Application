@@ -63,6 +63,7 @@ CUSTOMER_QUERIES = {
             c.Id AS CustomerId, 
             c.UserId,
             c.Balance,
+            c.AccountNumber,
             u.FirstName,
             u.LastName,
             u.Email,

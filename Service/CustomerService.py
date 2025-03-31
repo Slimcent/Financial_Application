@@ -264,6 +264,8 @@ class CustomerService:
                     logger.warning(f"Customer with user ID {user_id} does not exist.")
                     return False
 
+                account_number = await generate_account_number(account_type_id=account_type_id)
+
                 if account_type_id in existing_account_types:
                     logger.info(f"Account type {account_type_id} already exists for customer {user_id}. "
                                 f"No action needed.")
@@ -271,7 +273,7 @@ class CustomerService:
 
                 # If account type does not exist, insert it
                 logger.info(f"Adding new account type {account_type_id} for customer {user_id}...")
-                await cursor.execute(CUSTOMER_QUERIES["CREATE_CUSTOMER"], (user_id, account_type_id, 0.0))
+                await cursor.execute(CUSTOMER_QUERIES["CREATE_CUSTOMER"], (user_id, account_type_id, 0.0, account_number))
                 await connection.commit()
 
                 logger.info(f"Account type {account_type_id} successfully added for customer {user_id}.")
