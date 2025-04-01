@@ -25,7 +25,7 @@ class DatabaseConnection:
                 password=self.password,
                 db=self.database,
                 autocommit=True,
-                maxsize=10  # Define max connections in the pool
+                maxsize=10
             )
             print("Connected to MySQL (Async)")
             print()

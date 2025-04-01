@@ -1,8 +1,5 @@
-import database_connection
-from Application.AccountApplication import AccountApplication
-from Repository.AccountRepository import AccountRepository
-from Service.AccountService import AccountService
 from database_connection import DatabaseConnection
+from Application.AccountApplication import AccountApplication
 
 
 class ProcessAccount:
