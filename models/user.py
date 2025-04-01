@@ -1,7 +1,8 @@
+from sqlalchemy.dialects.mysql import TIMESTAMP
 from sqlalchemy.orm import relationship
 
 from database_orm import Base
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, func
 
 
 class User(Base):
@@ -13,6 +14,9 @@ class User(Base):
     Email = Column(String(255), unique=True, nullable=False)
     RoleId = Column(Integer, ForeignKey("Roles.Id"), nullable=False)
     Password = Column(String(255), nullable=False)
+    Active = Column(Boolean, nullable=False, server_default="1")
+    CreatedAt = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    UpdatedAt = Column(TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now())
 
     Role = relationship("Role", back_populates="Users")
     Staff = relationship("Staff", uselist=False, back_populates="User")

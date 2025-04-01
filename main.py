@@ -12,11 +12,11 @@ async def main():
     # staff = StaffApplication()
     # await staff.run_application()
 
-    # customer = CustomerApplication()
-    # await customer.run_application()
+    customer = CustomerApplication()
+    await customer.run_application()
 
-    account = ProcessAccount()
-    await account.run_application()
+    # account = ProcessAccount()
+    # await account.run_application()
 
 if __name__ == "__main__":
     asyncio.run(main())

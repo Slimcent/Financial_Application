@@ -15,10 +15,11 @@ class CustomerApplication:
 
     async def run_application(self):
         # await self.create_customer(customer_request=CustomerRequest(
-        #     last_name="Cena",
-        #     first_name="Don",
-        #     email="cena@yopmail.com",
-        #     account_Type_Id=2
+        #     last_name="Bella",
+        #     first_name="Spencer",
+        #     address="Enugu",
+        #     email="bspencer@yopmail.com",
+        #     account_Type_Id=1
         # ))
 
         # await self.update_customer(9, customer_request=CustomerRequest(
@@ -29,8 +30,8 @@ class CustomerApplication:
         # ))
 
         # await self.delete_customer(15)
-        await self.get_customer_details(8)
-        # await self.add_or_update_customer_account_type(17, 2)
+        await self.get_customer_details(3)
+        # await self.add_or_update_customer_account_type(5, 2)
         # customers = await self.get_all_customers()
         # if customers:
         #     for customer in customers:
