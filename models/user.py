@@ -1,13 +1,18 @@
+from sqlalchemy.orm import relationship
+
 from database_orm import Base
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, ForeignKey
 
 
 class User(Base):
     __tablename__ = "Users"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    last_name = Column(String(100), nullable=False)
-    first_name = Column(String(100), nullable=False)
-    email = Column(String(255), unique=True, nullable=False)
-    role_id = Column(Integer, nullable=False)
-    password = Column(String(255), nullable=False)
+    Id = Column(Integer, primary_key=True, autoincrement=True)
+    LastName = Column(String(100), nullable=False)
+    FirstName = Column(String(100), nullable=False)
+    Email = Column(String(255), unique=True, nullable=False)
+    RoleId = Column(Integer, ForeignKey("Roles.Id"), nullable=False)
+    Password = Column(String(255), nullable=False)
+
+    Role = relationship("Role", back_populates="Users")
+    Staff = relationship("Staff", uselist=False, back_populates="User")
