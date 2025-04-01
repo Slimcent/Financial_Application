@@ -1,4 +1,5 @@
 from database_orm import Base, engine
+import models.user
 
 print(Base.metadata.tables.keys())
 

@@ -1,8 +1,8 @@
 """Remove description from TransactionTypes
 
-Revision ID: 879f3009fdf2
-Revises: 61e93fcb9b9f
-Create Date: 2025-04-01 14:07:10.635865
+Revision ID: a610b1521576
+Revises: 661832db22c0
+Create Date: 2025-04-01 16:32:05.461641
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
-revision: str = '879f3009fdf2'
-down_revision: Union[str, None] = '61e93fcb9b9f'
+revision: str = 'a610b1521576'
+down_revision: Union[str, None] = '661832db22c0'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

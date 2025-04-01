@@ -1,8 +1,8 @@
 """Add description column to TransactionTypes
 
-Revision ID: e8e2a6d41b0a
-Revises: b6bae2b9cf81
-Create Date: 2025-04-01 14:02:51.194524
+Revision ID: 661832db22c0
+Revises: 149509a30a8a
+Create Date: 2025-04-01 16:30:27.507857
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'e8e2a6d41b0a'
-down_revision: Union[str, None] = 'b6bae2b9cf81'
+revision: str = '661832db22c0'
+down_revision: Union[str, None] = '149509a30a8a'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

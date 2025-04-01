@@ -18,20 +18,6 @@ engine = create_engine(DATABASE_URL, echo=True)
 # Base class for models
 Base = declarative_base()
 
-# Import models after declaring Base
-import models.user
-import models.customer
-import models.account_type
-import models.transaction_status
-import models.transaction_mode
-import models.transaction_type
-import models.transaction
-import models.Roles
-import models.Staff
-
-# Debugging: Print registered tables
-print("Tables detected:", Base.metadata.tables.keys())
-
 # Session factory
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
