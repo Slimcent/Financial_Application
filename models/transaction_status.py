@@ -1,9 +1,8 @@
-from sqlalchemy import Integer, Column, String, text, TIMESTAMP
+from models.base_entity import BaseEntity
+from sqlalchemy import Integer, Column, String
 
-from database_orm import Base
 
-
-class TransactionStatus(Base):
+class TransactionStatus(BaseEntity):
     __tablename__ = "TransactionStatuses"
 
     Id = Column(Integer, primary_key=True, autoincrement=True)

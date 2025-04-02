@@ -1,5 +1,7 @@
 from alembic import context
 from database_orm import Base, engine
+import models.base_entity
+import models.accounts
 import models.user
 import models.customer
 import models.account_type

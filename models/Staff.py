@@ -1,10 +1,9 @@
+from models.base_entity import BaseEntity
 from sqlalchemy.orm import relationship
-
-from database_orm import Base
 from sqlalchemy import Column, Integer, String, ForeignKey
 
 
-class Staff(Base):
+class Staff(BaseEntity):
     __tablename__ = "Staff"
 
     Id = Column(Integer, primary_key=True, autoincrement=True)

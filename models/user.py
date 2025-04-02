@@ -1,11 +1,10 @@
 from sqlalchemy.dialects.mysql import TIMESTAMP
 from sqlalchemy.orm import relationship
-
-from database_orm import Base
+from models.base_entity import BaseEntity
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, func
 
 
-class User(Base):
+class User(BaseEntity):
     __tablename__ = "Users"
 
     Id = Column(Integer, primary_key=True, autoincrement=True)

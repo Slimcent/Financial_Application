@@ -1,10 +1,9 @@
 from sqlalchemy.orm import relationship
-
-from database_orm import Base
+from models.base_entity import BaseEntity
 from sqlalchemy import Column, Integer, String
 
 
-class Role(Base):
+class Role(BaseEntity):
     __tablename__ = "Roles"
 
     Id = Column(Integer, primary_key=True, autoincrement=True)

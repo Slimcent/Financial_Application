@@ -1,9 +1,8 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, text
+from models.base_entity import BaseEntity
+from sqlalchemy import Column, Integer, String
 
-from database_orm import Base
 
-
-class TransactionType(Base):
+class TransactionType(BaseEntity):
     __tablename__ = "TransactionTypes"
 
     Id = Column(Integer, primary_key=True, autoincrement=True)

@@ -1,9 +1,8 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, text
+from models.base_entity import BaseEntity
+from sqlalchemy import Column, Integer, String
 
-from database_orm import Base
 
-
-class TransactionMode(Base):
+class TransactionMode(BaseEntity):
     __tablename__ = "TransactionModes"
 
     Id = Column(Integer, primary_key=True, autoincrement=True)

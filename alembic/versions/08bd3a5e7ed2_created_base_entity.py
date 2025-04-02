@@ -1,18 +1,18 @@
-"""modified models
+"""created base entity
 
-Revision ID: 47f05344effc
+Revision ID: 08bd3a5e7ed2
 Revises: 
-Create Date: 2025-04-01 17:26:28.356272
+Create Date: 2025-04-02 17:24:09.861470
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
+from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
-revision: str = '47f05344effc'
+revision: str = '08bd3a5e7ed2'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,30 +24,40 @@ def upgrade() -> None:
     op.create_table('AccountTypes',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('Type', sa.String(length=50), nullable=False),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('Id'),
     sa.UniqueConstraint('Type')
     )
     op.create_table('Roles',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('Name', sa.String(length=100), nullable=False),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('Id'),
     sa.UniqueConstraint('Name')
     )
     op.create_table('TransactionModes',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('Name', sa.String(length=50), nullable=False),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('Id'),
     sa.UniqueConstraint('Name')
     )
     op.create_table('TransactionStatuses',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('Name', sa.String(length=50), nullable=False),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('Id'),
     sa.UniqueConstraint('Name')
     )
     op.create_table('TransactionTypes',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('Name', sa.String(length=50), nullable=False),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('Id'),
     sa.UniqueConstraint('Name')
     )
@@ -58,6 +68,9 @@ def upgrade() -> None:
     sa.Column('Email', sa.String(length=255), nullable=False),
     sa.Column('RoleId', sa.Integer(), nullable=False),
     sa.Column('Password', sa.String(length=255), nullable=False),
+    sa.Column('Active', sa.Boolean(), server_default='1', nullable=False),
+    sa.Column('CreatedAt', mysql.TIMESTAMP(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('UpdatedAt', mysql.TIMESTAMP(), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['RoleId'], ['Roles.Id'], ),
     sa.PrimaryKeyConstraint('Id'),
     sa.UniqueConstraint('Email')
@@ -65,32 +78,48 @@ def upgrade() -> None:
     op.create_table('Customers',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('UserId', sa.Integer(), nullable=False),
-    sa.Column('AccountTypeid', sa.Integer(), nullable=True),
-    sa.Column('Balance', sa.DECIMAL(precision=10, scale=2), nullable=False),
+    sa.Column('Address', sa.String(length=255), nullable=True),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['UserId'], ['Users.Id'], ),
-    sa.PrimaryKeyConstraint('Id'),
-    sa.UniqueConstraint('UserId')
+    sa.PrimaryKeyConstraint('Id')
     )
     op.create_table('Staff',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('UserId', sa.Integer(), nullable=False),
     sa.Column('Position', sa.String(length=100), nullable=False),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['UserId'], ['Users.Id'], ),
     sa.PrimaryKeyConstraint('Id'),
     sa.UniqueConstraint('UserId')
     )
-    op.create_table('Transactions',
+    op.create_table('Accounts',
     sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('CustomerId', sa.Integer(), nullable=False),
-    sa.Column('AccountTypeId', sa.Integer(), nullable=True),
-    sa.Column('Account_Number', sa.String(length=10), nullable=True),
+    sa.Column('AccountTypeId', sa.Integer(), nullable=False),
+    sa.Column('AccountNumber', sa.String(length=10), nullable=False),
+    sa.Column('Balance', sa.DECIMAL(precision=10, scale=2), nullable=False),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['AccountTypeId'], ['AccountTypes.Id'], ),
+    sa.ForeignKeyConstraint(['CustomerId'], ['Customers.Id'], ),
+    sa.PrimaryKeyConstraint('Id'),
+    sa.UniqueConstraint('AccountNumber'),
+    sa.UniqueConstraint('CustomerId', 'AccountTypeId', name='uq_customer_account_type')
+    )
+    op.create_table('Transactions',
+    sa.Column('Id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('AccountId', sa.Integer(), nullable=False),
     sa.Column('TransactionTypeId', sa.Integer(), nullable=False),
     sa.Column('TransactionModeId', sa.Integer(), nullable=False),
     sa.Column('TransactionStatusId', sa.Integer(), nullable=False),
     sa.Column('Amount', sa.DECIMAL(precision=10, scale=2), nullable=False),
     sa.Column('TransactionDate', sa.TIMESTAMP(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('Description', sa.String(length=255), nullable=True),
-    sa.ForeignKeyConstraint(['CustomerId'], ['Customers.Id'], ),
+    sa.Column('CreatedAt', sa.DateTime(), nullable=False),
+    sa.Column('UpdatedAt', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['AccountId'], ['Accounts.Id'], ),
     sa.ForeignKeyConstraint(['TransactionModeId'], ['TransactionModes.Id'], ),
     sa.ForeignKeyConstraint(['TransactionStatusId'], ['TransactionStatuses.Id'], ),
     sa.ForeignKeyConstraint(['TransactionTypeId'], ['TransactionTypes.Id'], ),
@@ -103,6 +132,7 @@ def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table('Transactions')
+    op.drop_table('Accounts')
     op.drop_table('Staff')
     op.drop_table('Customers')
     op.drop_table('Users')
