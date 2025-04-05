@@ -14,28 +14,29 @@ class CustomerApplication:
         self.customer_service = CustomerService(self.database_connection, self.user_service)
 
     async def run_application(self):
-        # await self.create_customer(customer_request=CustomerRequest(
-        #     last_name="Bella",
-        #     first_name="Spencer",
-        #     address="Enugu",
-        #     email="bspencer@yopmail.com",
-        #     account_Type_Id=1
-        # ))
+        #     await self.create_customer(customer_request=CustomerRequest(
+        #         last_name="Ebus",
+        #         first_name="Rhema",
+        #         address="Enugu",
+        #         email="check@yopmail.com",
+        #         account_type_id=1
+        #     ))
 
-        # await self.update_customer(9, customer_request=CustomerRequest(
-        #     last_name="Ebus",
+        # await self.update_customer(7, customer_request=CustomerRequest(
+        #     last_name="Ebuka",
         #     first_name="Rhema",
         #     email="ebus@yopmail.com",
-        #     account_Type_Id=None
+        #     address="Abia",
+        #     account_type_id=None
         # ))
 
-        # await self.delete_customer(15)
-        await self.get_customer_details(3)
-        # await self.add_or_update_customer_account_type(5, 2)
-        # customers = await self.get_all_customers()
-        # if customers:
-        #     for customer in customers:
-        #         print(customer)
+        # await self.delete_customer(8)
+        # await self.get_customer_details(6)
+        # await self.add_or_update_customer_account_type(2, 2)
+        customers = await self.get_all_customers()
+        if customers:
+            for customer in customers:
+                print(customer)
 
     async def create_customer(self, customer_request: CustomerRequest):
         logger.info(f"Starting to create customer {customer_request.email}")
@@ -86,8 +87,7 @@ class CustomerApplication:
                 "email": customer.email,
                 "role_id": customer.role_id,
                 "role_name": customer.role_name,
-                "account_types": customer.account_types,
-                "balance": customer.balance,
+                "accounts": customer.accounts,
                 "active": customer.active,
                 "created_at": customer.created_at.strftime("%Y-%m-%d %H:%M:%S") if customer.created_at else None
             }
@@ -104,9 +104,9 @@ class CustomerApplication:
             logger.warning(f"Customer with User ID {user_id} not found.")
             return None
 
-        account_types = [
-            f"{account['account_type']} (Id: {account['account_type_id']})"
-            for account in customer.account_types
+        account_descriptions = [
+            f"{account.account_type} (Id: {account.account_type_id})"
+            for account in customer.accounts
         ]
 
         print(
@@ -117,7 +117,7 @@ class CustomerApplication:
             f"Role: {customer.role_name} (Role Id: {customer.role_id})\n"
             f"Active: {customer.active}\n"
             f"Created At: {customer.created_at}\n"
-            f"Account Types: {', '.join(account_types)}"
+            f"Accounts: {', '.join(account_descriptions)}"
         )
 
         return customer

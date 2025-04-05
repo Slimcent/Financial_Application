@@ -14,5 +14,10 @@ ACCOUNT_QUERIES = {
         JOIN Users u ON c.UserId = u.Id
         JOIN AccountTypes at ON c.AccountTypeId = at.Id
         WHERE u.Id = %s AND c.AccountTypeId = %s
+    """,
+
+    "CREATE_ACCOUNT": """
+        INSERT INTO Accounts (CustomerId, AccountTypeId, AccountNumber, Balance) 
+        VALUES (%s, %s, %s, %s)
     """
 }

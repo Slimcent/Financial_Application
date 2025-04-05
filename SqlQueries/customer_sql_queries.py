@@ -1,7 +1,12 @@
 CUSTOMER_QUERIES = {
     "CREATE_CUSTOMER": """
-        INSERT INTO Customers (UserId, AccountTypeId, Balance, AccountNumber) 
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO Customers (UserId, Address) VALUES (%s, %s)
+    """,
+
+    "UPDATE_CUSTOMER": "UPDATE Customers SET Address = %s WHERE UserId = %s",
+
+    "CREATE_ACCOUNT": """
+        INSERT INTO Accounts (CustomerId, AccountTypeId, AccountNumber, Balance) VALUES (%s, %s, %s, %s)
     """,
 
     "GET_Single_CUSTOMER": """
@@ -24,20 +29,25 @@ CUSTOMER_QUERIES = {
     "GET_CUSTOMER_BY_USER_ID": """
         SELECT 
             c.Id AS CustomerId,
-            c.UserId, 
-            u.FirstName, 
-            u.LastName, 
+            c.Address,
+            c.UserId,
+            u.FirstName,
+            u.LastName,
             u.Email,
-            u.Active, 
+            u.Active,
             r.Id AS RoleId,
             r.Name AS RoleName,
             u.CreatedAt,
-            a.Id AS AccountTypeId,
-            a.Type AS AccountType
+            a.Id AS AccountId,
+            a.AccountNumber,
+            a.Balance,
+            at.Id AS AccountTypeId,
+            at.Type AS AccountType
         FROM Customers c
         JOIN Users u ON u.Id = c.UserId
         LEFT JOIN Roles r ON u.RoleId = r.Id
-        LEFT JOIN AccountTypes a ON c.AccountTypeId = a.Id
+        LEFT JOIN Accounts a ON c.Id = a.CustomerId
+        LEFT JOIN AccountTypes at ON a.AccountTypeId = at.Id
         WHERE c.UserId = %s;
     """,
 
@@ -55,28 +65,31 @@ CUSTOMER_QUERIES = {
     """,
 
     "GET_CUSTOMER_ACCOUNT_TYPES": """
-        SELECT AccountTypeId FROM Customers WHERE UserId = %s
+        SELECT AccountTypeId FROM Accounts WHERE CustomerId = %s
     """,
 
     "GET_ALL_CUSTOMERS": """
         SELECT 
-            c.Id AS CustomerId, 
+            c.Id AS CustomerId,
+            c.Address,
             c.UserId,
-            c.Balance,
-            c.AccountNumber,
             u.FirstName,
             u.LastName,
             u.Email,
             u.Active,
-            r.Name AS RoleName,
             r.Id AS RoleId,
+            r.Name AS RoleName,
             u.CreatedAt,
-            a.Id AS AccountTypeId,
-            a.Type AS AccountType
+            a.Id AS AccountId,
+            a.AccountNumber,
+            a.Balance,
+            at.Id AS AccountTypeId,
+            at.Type AS AccountType
         FROM Customers c
         JOIN Users u ON u.Id = c.UserId
         LEFT JOIN Roles r ON u.RoleId = r.Id
-        LEFT JOIN AccountTypes a ON c.AccountTypeId = a.Id
-        ORDER BY u.LastName, a.Id;
-    """
+        LEFT JOIN Accounts a ON c.Id = a.CustomerId
+        LEFT JOIN AccountTypes at ON a.AccountTypeId = at.Id
+        ORDER BY u.LastName, at.Id;
+        """
 }
