@@ -1,5 +1,3 @@
-from SqlQueries.account_sql_queries import ACCOUNT_QUERIES
-from Utility.AccountNumber import generate_account_number
 from logger import logger
 from datetime import datetime
 from aiomysql import DictCursor
@@ -9,6 +7,8 @@ from Dtos.Request.UserRequest import UserRequest
 from Dtos.Response.UserResponse import UserResponse
 from Infrastructure.AppConstants import AppConstants
 from Dtos.Request.CustomerRequest import CustomerRequest
+from Utility.AccountNumber import generate_account_number
+from SqlQueries.account_sql_queries import ACCOUNT_QUERIES
 from Dtos.Request.UpdateUserRequest import UpdateUserRequest
 from SqlQueries.customer_sql_queries import CUSTOMER_QUERIES
 from Dtos.Response.AccountsResponse import AccountsResponse
