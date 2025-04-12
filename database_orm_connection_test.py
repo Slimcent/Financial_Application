@@ -1,14 +1,12 @@
+import sys
 from sqlalchemy import text
-
 from database_orm import engine
 
-import sys
 print(sys.path)
 
 
 def test_connection():
     try:
-        # Try to connect to the database
         with engine.connect() as connection:
             print("Successfully connected to the database!")
 

@@ -14,5 +14,6 @@ class Account(BaseEntity):
 
     customer = relationship("Customer", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account")
+    account_type = relationship("AccountType", back_populates="accounts")
 
     __table_args__ = (UniqueConstraint("CustomerId", "AccountTypeId", name="uq_customer_account_type"),)

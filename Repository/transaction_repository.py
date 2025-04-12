@@ -3,7 +3,9 @@ from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload, joinedload
 
+from models.accounts import Account
 from models.customer import Customer
 from models.transaction import Transaction
 
@@ -16,9 +18,16 @@ class TransactionRepository:
         result = await self.session.execute(select(Customer).filter_by(Id=customer_id, AccountTypeId=account_type_id))
         return result.scalars().first()
 
-    async def get_accounts_by_customer_id(self, user_id: int) -> List[Customer]:
-        result = await self.session.execute(select(Customer).filter_by(UserId=user_id))
-        return result.scalars().all()
+    def get_customer_with_accounts_by_user_id(self, user_id: int):
+        return (
+            self.db.query(Customer)
+            .options(
+                joinedload(Customer.accounts).joinedload(Account.account_type),
+                joinedload(Customer.user)
+            )
+            .filter(Customer.UserId == user_id)
+            .first()
+        )
 
     async def get_customer_by_id(self, customer_id: int) -> Customer:
         result = await self.session.execute(select(Customer).filter_by(Id=customer_id))
