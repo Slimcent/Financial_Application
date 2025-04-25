@@ -3,6 +3,7 @@ from Application.AccountTypesApplication import AccountTypesApplication
 from Application.CustomerApplication import CustomerApplication
 from Application.StaffApplication import StaffApplication
 from ApplicationProcessing.ProcessAccount import ProcessAccount
+from ApplicationProcessing.ProcessTransaction import ProcessTransaction
 
 
 async def main():
@@ -12,8 +13,11 @@ async def main():
     # staff = StaffApplication()
     # await staff.run_application()
 
-    customer = CustomerApplication()
-    await customer.run_application()
+    # customer = CustomerApplication()
+    # await customer.run_application()
+
+    transaction = ProcessTransaction()
+    await transaction.run_application()
 
     # account = ProcessAccount()
     # await account.run_application()

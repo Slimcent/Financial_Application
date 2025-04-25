@@ -1,52 +1,51 @@
 from decimal import Decimal
-from typing import List
-
+from models.user import User
+from models.Roles import Role
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
-
+from models.Staff import Staff
+from typing import List, Optional
 from models.accounts import Account
 from models.customer import Customer
+from database_orm_async import Database
 from models.transaction import Transaction
+from models.account_type import AccountType
+from models.transaction_type import TransactionType
+from sqlalchemy.orm import selectinload, joinedload
+from models.transaction_mode import TransactionMode
+from models.transaction_status import TransactionStatus
 
 
 class TransactionRepository:
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self):
+        self.db = Database()
 
-    async def get_customer_by_id_and_account_type(self, customer_id: int, account_type_id: int) -> Customer:
-        result = await self.session.execute(select(Customer).filter_by(Id=customer_id, AccountTypeId=account_type_id))
-        return result.scalars().first()
-
-    def get_customer_with_accounts_by_user_id(self, user_id: int):
-        return (
-            self.db.query(Customer)
-            .options(
-                joinedload(Customer.accounts).joinedload(Account.account_type),
-                joinedload(Customer.user)
+    async def get_account_by_customer_and_type(self, customer_id: int, account_type_id: int):
+        print("Trying to connect to the database")
+        async with self.db.get_session() as session:
+            result = await session.execute(
+                select(Account)
+                .options(
+                    joinedload(Account.customer).joinedload(Customer.user),
+                    joinedload(Account.account_type)
+                )
+                .filter(
+                    Account.CustomerId == customer_id,
+                    Account.AccountTypeId == account_type_id
+                )
             )
-            .filter(Customer.UserId == user_id)
-            .first()
-        )
 
-    async def get_customer_by_id(self, customer_id: int) -> Customer:
-        result = await self.session.execute(select(Customer).filter_by(Id=customer_id))
-        return result.scalars().first()
+            print("Done getting data")
+            return result.scalars().first()
 
-    async def create_transaction(self, customer_id: int, account_number: str, amount: Decimal, transaction_type_id: int,
-                                 transaction_mode_id: int) -> Transaction:
-        new_transaction = Transaction(
-            CustomerId=customer_id,
-            AccountNumber=account_number,
-            Amount=amount,
-            TransactionTypeId=transaction_type_id,
-            TransactionModeId=transaction_mode_id
-        )
-        self.session.add(new_transaction)
-        await self.session.commit()
-        await self.session.refresh(new_transaction)
-        return new_transaction
-
-    async def check_account_exists(self, customer_id: int, account_number: str) -> bool:
-        result = await self.session.execute(select(Customer).filter_by(Id=customer_id, AccountNumber=account_number))
-        return result.scalars().first() is not None
+    async def get_customer_with_accounts_by_user_id(self, user_id: int) -> Optional[Customer]:
+        async with self.db.get_session() as session:
+            stmt = (
+                select(Customer)
+                .options(
+                    joinedload(Customer.accounts).joinedload(Account.account_type),
+                    joinedload(Customer.user)
+                )
+                .filter(Customer.UserId == user_id)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().first()

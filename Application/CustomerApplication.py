@@ -14,13 +14,13 @@ class CustomerApplication:
         self.customer_service = CustomerService(self.database_connection, self.user_service)
 
     async def run_application(self):
-        #     await self.create_customer(customer_request=CustomerRequest(
-        #         last_name="Ebus",
-        #         first_name="Rhema",
-        #         address="Enugu",
-        #         email="check@yopmail.com",
-        #         account_type_id=1
-        #     ))
+        await self.create_customer(customer_request=CustomerRequest(
+            last_name="Mmeso",
+            first_name="Rhema",
+            address="PH",
+            email="mmeso@yopmail.com",
+            account_type_id=1
+        ))
 
         # await self.update_customer(7, customer_request=CustomerRequest(
         #     last_name="Ebuka",
@@ -33,10 +33,10 @@ class CustomerApplication:
         # await self.delete_customer(8)
         # await self.get_customer_details(6)
         # await self.add_or_update_customer_account_type(2, 2)
-        customers = await self.get_all_customers()
-        if customers:
-            for customer in customers:
-                print(customer)
+        # customers = await self.get_all_customers()
+        # if customers:
+        #     for customer in customers:
+        #         print(customer)
 
     async def create_customer(self, customer_request: CustomerRequest):
         logger.info(f"Starting to create customer {customer_request.email}")

@@ -13,4 +13,4 @@ class Customer(BaseEntity):
     Address = Column(String(255), nullable=True)
 
     accounts = relationship("Account", back_populates="customer")
-    Customer = relationship("Customer", uselist=False, back_populates="User")
+    user = relationship("User", back_populates="customer")
