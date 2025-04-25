@@ -1,30 +1,3 @@
-# import os
-# from dotenv import load_dotenv
-# from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-# from sqlalchemy.orm import declarative_base
-#
-# # Load environment variables
-# load_dotenv()
-# print(".env loaded")
-#
-# # Async Database connection URL
-# DATABASE_URL = f"mysql+aiomysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@" \
-#                f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-#
-# # Create async SQLAlchemy engine (no await needed here)
-# engine = create_async_engine(DATABASE_URL, echo=True)
-#
-# # Base for models
-# Base = declarative_base()
-#
-# # Use async_sessionmaker here instead of sessionmaker
-# AsyncSessionLocal = async_sessionmaker(
-#     bind=engine,
-#     class_=AsyncSession,
-#     expire_on_commit=False,
-# )
-
-
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
