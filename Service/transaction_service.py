@@ -9,7 +9,7 @@ class TransactionService:
 
     async def get_customer_account_details(self, customer_id: int, account_type_id: int) -> AccountResponse:
         print("Transaction service")
-        account = await self.transaction_repo.get_account_by_customer_and_type(customer_id, account_type_id)
+        account = await self.transaction_repo.get_customer_accounts(customer_id, account_type_id)
 
         if not account:
             raise ValueError("Account not found.")
@@ -36,4 +36,35 @@ class TransactionService:
             email=user.Email,
             accounts=[account_response],
             balance=float(account.Balance)
+        )
+
+    async def get_customer_accounts_with_user_id(self, user_id: int) -> AccountResponse:
+        customer = await self.transaction_repo.get_customer_accounts_with_user_id(user_id)
+
+        if not customer:
+            raise ValueError("Customer not found.")
+
+        user = customer.user
+
+        account_responses = [
+            AccountsResponse(
+                account_id=account.Id,
+                account_number=account.AccountNumber,
+                balance=float(account.Balance),
+                account_type_id=account.AccountTypeId,
+                account_type=account.account_type.Type
+            )
+            for account in customer.accounts
+        ]
+
+        total_balance = sum(account.Balance for account in customer.accounts)
+
+        return AccountResponse(
+            user_id=user.Id,
+            customer_id=customer.Id,
+            last_name=user.LastName,
+            first_name=user.FirstName,
+            email=user.Email,
+            accounts=account_responses,
+            total_balance=total_balance
         )

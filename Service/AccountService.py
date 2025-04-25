@@ -1,7 +1,7 @@
 from logger import logger
 from typing import Optional, List
 from Dtos.Response.AccountResponse import AccountResponse
-from Repository.AccountRepository import AccountRepository
+from Repository.account_repository import AccountRepository
 
 
 class AccountService:

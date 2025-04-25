@@ -14,6 +14,7 @@ class AccountResponse:
             email: str = None,
             accounts: List[AccountsResponse] = None,
             balance: float = None,
+            total_balance: float = None,
     ):
         self.user_id = user_id
         self.customer_id = customer_id
@@ -22,3 +23,4 @@ class AccountResponse:
         self.email = email
         self.accounts = accounts or []
         self.balance = balance
+        self.total_balance = total_balance

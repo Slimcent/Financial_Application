@@ -1,6 +1,6 @@
 from Dtos.Response.AccountResponse import AccountResponse
 from database_connection import DatabaseConnection
-from Repository.AccountRepository import AccountRepository
+from Repository.account_repository import AccountRepository
 from logger import logger
 from typing import Any, Optional, List
 from Service.AccountService import AccountService

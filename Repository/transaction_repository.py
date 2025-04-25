@@ -19,7 +19,7 @@ class TransactionRepository:
     def __init__(self):
         self.db = Database()
 
-    async def get_account_by_customer_and_type(self, customer_id: int, account_type_id: int):
+    async def get_customer_accounts(self, customer_id: int, account_type_id: int):
         print("Trying to connect to the database")
         async with self.db.get_session() as session:
             result = await session.execute(
@@ -37,7 +37,7 @@ class TransactionRepository:
             print("Done getting data")
             return result.scalars().first()
 
-    async def get_customer_with_accounts_by_user_id(self, user_id: int) -> Optional[Customer]:
+    async def get_customer_accounts_with_user_id(self, user_id: int) -> Optional[Customer]:
         async with self.db.get_session() as session:
             stmt = (
                 select(Customer)

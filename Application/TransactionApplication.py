@@ -1,6 +1,8 @@
+from typing import Optional, Dict, Any
+
 from Dtos.Response.AccountResponse import AccountResponse
 from Repository.transaction_repository import TransactionRepository
-from Service.TransactionService import TransactionService
+from Service.transaction_service import TransactionService
 from logger import logger
 
 
@@ -25,6 +27,17 @@ class TransactionApplication:
             print(f"Error processing customer account: {e}")
             return None
 
+    async def get_customer_accounts_with_user_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+        customer = await self.transaction_service.get_customer_accounts_with_user_id(user_id)
+
+        if not customer:
+            return None
+
+        logger.info("Mapping retrieved account details to account response")
+        account_data_dict = _convert_account_response_to_dict(customer)
+
+        return account_data_dict
+
 
 def _convert_account_response_to_dict(account_response: AccountResponse) -> dict:
     accounts_list = []
@@ -44,4 +57,5 @@ def _convert_account_response_to_dict(account_response: AccountResponse) -> dict
         "first_name": account_response.first_name,
         "email": account_response.email,
         "accounts": accounts_list,
+        "total_balance": account_response.total_balance
     }
