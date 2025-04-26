@@ -14,8 +14,10 @@ class Transaction(BaseEntity):
     Amount = Column(DECIMAL(10, 2), nullable=False)
     TransactionDate = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     Description = Column(String(255), nullable=True)
+    UserId = Column(Integer, ForeignKey("Users.Id"), nullable=False)
 
     account = relationship("Account", back_populates="transactions")
     transaction_type = relationship("TransactionType")
     transaction_mode = relationship("TransactionMode")
     transaction_status = relationship("TransactionStatus")
+    user = relationship("User")

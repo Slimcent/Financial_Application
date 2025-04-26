@@ -1,4 +1,6 @@
 from decimal import Decimal
+
+from Dtos.Request.transaction_request import TransactionRequest
 from models.user import User
 from models.Roles import Role
 from sqlalchemy import select
@@ -20,7 +22,6 @@ class TransactionRepository:
         self.db = Database()
 
     async def get_customer_accounts(self, customer_id: int, account_type_id: int):
-        print("Trying to connect to the database")
         async with self.db.get_session() as session:
             result = await session.execute(
                 select(Account)
@@ -34,7 +35,6 @@ class TransactionRepository:
                 )
             )
 
-            print("Done getting data")
             return result.scalars().first()
 
     async def get_customer_accounts_with_user_id(self, user_id: int) -> Optional[Customer]:
@@ -49,3 +49,53 @@ class TransactionRepository:
             )
             result = await session.execute(stmt)
             return result.scalars().first()
+
+    async def get_account_by_account_number(self, account_number: str) -> Optional[Account]:
+        async with self.db.get_session() as session:
+            stmt = (
+                select(Account)
+                .options(
+                    joinedload(Account.account_type),
+                    joinedload(Account.customer).joinedload(Customer.user)
+                )
+                .filter(Account.AccountNumber == account_number)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().first()
+
+    async def update_account_balance(self, account: Account, amount: float, session=None):
+        try:
+            account.Balance += amount
+            if session is None:
+                async with self.db.get_session() as session:
+                    session.add(account)
+                    await session.commit()
+                    return account
+            else:
+                session.add(account)
+                return account
+        except Exception as e:
+            print(f"Update balance error: {e}")
+            raise
+
+    async def create_transaction(self, transaction_request: TransactionRequest, session=None):
+        try:
+            transaction = Transaction(
+                UserId = transaction_request.user_id,
+                AccountId=transaction_request.account_id,
+                TransactionTypeId=transaction_request.transaction_type_id,
+                TransactionModeId=transaction_request.transaction_mode_id,
+                TransactionStatusId=transaction_request.transaction_status_id,
+                Amount=transaction_request.amount,
+                Description=transaction_request.description
+            )
+
+            if session is None:
+                async with self.db.get_session() as session:
+                    session.add(transaction)
+                    await session.commit()
+            else:
+                session.add(transaction)
+        except Exception as e:
+            print(f"Transaction creation failed: {e}")
+            raise

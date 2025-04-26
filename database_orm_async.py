@@ -61,7 +61,6 @@ class Database:
         self._initialized = True
 
         load_dotenv()
-        print(".env loaded")
 
         self.database_url = _build_database_url()
         self.engine: AsyncEngine = self._create_engine()

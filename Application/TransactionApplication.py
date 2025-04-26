@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any
 
 from Dtos.Response.AccountResponse import AccountResponse
+from Dtos.Response.AccountsResponse import AccountsResponse
 from Repository.transaction_repository import TransactionRepository
 from Service.transaction_service import TransactionService
 from logger import logger
@@ -37,6 +38,19 @@ class TransactionApplication:
         account_data_dict = _convert_account_response_to_dict(customer)
 
         return account_data_dict
+
+    async def get_account_details_by_account_number(self, account_number: str) -> Optional[AccountsResponse]:
+        return await self.transaction_service.get_account_details_by_account_number(account_number)
+
+    async def get_account_balance_by_account_number(self, account_number: str) -> Optional[float]:
+        account = await self.transaction_service.get_account_details_by_account_number(account_number)
+        if account:
+            return account.balance
+        return None
+
+    async def fund_account(self, account_number: str, amount: float, description: Optional[str] = None) \
+            -> AccountsResponse:
+        return await self.transaction_service.fund_account(account_number, amount, description)
 
 
 def _convert_account_response_to_dict(account_response: AccountResponse) -> dict:
