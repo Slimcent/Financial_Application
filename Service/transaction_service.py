@@ -1,14 +1,18 @@
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from Dtos.Request.transaction_request import TransactionRequest
+from Dtos.Request.transaction_request import UserTransactionsRequest
 from Dtos.Response.AccountResponse import AccountResponse
 from Dtos.Response.AccountsResponse import AccountsResponse
+from Dtos.Response.transaction_response import TransactionsResponse
 from Infrastructure.AppConstants import AppConstants
 from Repository.transaction_repository import TransactionRepository
 from Utility.exception_handler import wrap_errors
 from database_orm_async import Database
+from models.transaction import Transaction
+from models.user import User
 
 
 class TransactionService:
@@ -117,7 +121,6 @@ class TransactionService:
         try:
             async with self.db.get_session() as session:
                 async with session.begin():
-
                     await self.transaction_repository.update_account_balance(account, amount, session=session)
 
                     transaction_request = TransactionRequest(
@@ -150,3 +153,98 @@ class TransactionService:
         except Exception as e:
             raise ValueError(f"Unexpected error: {str(e)}") from e
 
+    async def get_user_transactions(self, user_id: int) -> AccountResponse:
+        user: User = await self.transaction_repository.get_user_transactions(user_id)
+
+        account_response = await map_user_transactions(user)
+
+        return account_response
+
+    async def filter_user_transactions(self, request: UserTransactionsRequest) -> AccountResponse:
+        user: User = await self.transaction_repository.get_user_transactions(request.user_id)
+
+        user = await filter_transactions(user, request)
+
+        account_response = await map_user_transactions(user)
+
+        return account_response
+
+
+async def filter_transactions(user: User, request: UserTransactionsRequest) -> User:
+    if request.account_type_id is not None:
+        user.transactions = [
+            transaction for transaction in user.transactions
+            if transaction.account.account_type.Id == request.account_type_id
+        ]
+
+    if request.transaction_type_id is not None:
+        user.transactions = [
+            transaction for transaction in user.transactions
+            if transaction.transaction_type.Id == request.transaction_type_id
+        ]
+
+    if request.transaction_mode_id is not None:
+        user.transactions = [
+            transaction for transaction in user.transactions
+            if transaction.transaction_mode.Id == request.transaction_mode_id
+        ]
+
+    if request.account_number is not None:
+        user.transactions = [
+            transaction for transaction in user.transactions
+            if transaction.account.AccountNumber == request.account_number
+        ]
+
+    if request.transaction_status_id is not None:
+        user.transactions = [
+            transaction for transaction in user.transactions
+            if transaction.transaction_status.Id == request.transaction_status_id
+        ]
+
+    return user
+
+
+async def map_user_transactions(user: User) -> AccountResponse:
+    transactions_responses: List[TransactionsResponse] = []
+    total_balance = 0.0
+
+    for transaction in user.transactions:
+        account = transaction.account
+        account_type = account.account_type
+        transaction_type = transaction.transaction_type
+        transaction_mode = transaction.transaction_mode
+        transaction_status = transaction.transaction_status
+
+        total_balance += float(transaction.Amount)
+
+        transactions_responses.append(
+            TransactionsResponse(
+                account_id=account.Id,
+                account_number=account.AccountNumber,
+                amount=float(transaction.Amount),
+                account_type_id=account_type.Id,
+                account_type=account_type.Type,
+                transaction_type_id=transaction_type.Id,
+                transaction_type=transaction_type.Name,
+                transaction_mode_id=transaction_mode.Id,
+                transaction_mode=transaction_mode.Name,
+                transaction_status_id=transaction_status.Id,
+                transaction_status=transaction_status.Name,
+                transaction_date=transaction.TransactionDate,
+                description=transaction.Description,
+            )
+        )
+
+    customer = user.customer
+    account_response = AccountResponse(
+        user_id=user.Id,
+        customer_id=customer.Id if customer else None,
+        last_name=user.LastName,
+        first_name=user.FirstName,
+        email=user.Email,
+        address=customer.Address if customer else None,
+        transactions=transactions_responses,
+        total_balance=total_balance
+    )
+
+    return account_response

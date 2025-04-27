@@ -20,4 +20,4 @@ class Transaction(BaseEntity):
     transaction_type = relationship("TransactionType")
     transaction_mode = relationship("TransactionMode")
     transaction_status = relationship("TransactionStatus")
-    user = relationship("User")
+    user = relationship("User", back_populates="transactions")

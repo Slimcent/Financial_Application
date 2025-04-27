@@ -1,4 +1,5 @@
 from Application.TransactionApplication import TransactionApplication
+from Dtos.Request.transaction_request import UserTransactionsRequest
 from Repository.transaction_repository import TransactionRepository
 from Service.transaction_service import TransactionService
 from database_orm_async import Database
@@ -39,11 +40,31 @@ class ProcessTransaction:
             # else:
             #     print("Account not found.")
 
-            fund_account = await self.transaction_application.fund_account("2606387058", 7000)
-            if fund_account is not None:
-                print(f"Account balance: {fund_account}")
+            # fund_account = await self.transaction_application.fund_account("2606387058", 7000)
+            # if fund_account is not None:
+            #     print(f"Account balance: {fund_account}")
+            # else:
+            #     print("Account funding failed")
+
+            user_transactions = await self.transaction_application.get_user_transactions(5)
+            if user_transactions is not None:
+                print(f"{user_transactions}")
             else:
-                print("Account funding failed")
+                print("No transactions found")
+
+            # request = UserTransactionsRequest(
+            #     user_id=6,
+            #     account_type_id=2,
+            #     transaction_type_id=None,
+            #     transaction_mode_id=None,
+            #     account_number=None,
+            #     transaction_status_id=None
+            # )
+            # filter_user_transactions = await self.transaction_application.filter_user_transactions(request)
+            # if filter_user_transactions is not None:
+            #     print(f"{filter_user_transactions}")
+            # else:
+            #     print("No transactions found")
 
         finally:
             await self.db.dispose()

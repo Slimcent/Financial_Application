@@ -20,3 +20,4 @@ class User(BaseEntity):
     Role = relationship("Role", back_populates="Users")
     Staff = relationship("Staff", uselist=False, back_populates="User")
     customer = relationship("Customer", uselist=False, back_populates="user")
+    transactions = relationship("Transaction", back_populates="user")

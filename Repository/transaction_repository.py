@@ -99,3 +99,43 @@ class TransactionRepository:
         except Exception as e:
             print(f"Transaction creation failed: {e}")
             raise
+
+    async def get__all_user_transactions(self, user_id: int) -> List[Transaction]:
+        async with self.db.get_session() as session:
+            stmt = (
+                select(Transaction)
+                .options(
+                    joinedload(Transaction.account).joinedload(Account.account_type),
+                    joinedload(Transaction.transaction_type),
+                    joinedload(Transaction.transaction_mode),
+                    joinedload(Transaction.transaction_status),
+                    joinedload(Transaction.user).joinedload(User.customer),
+                    joinedload(Transaction.user).joinedload(User.Staff),
+                )
+                .filter(Transaction.UserId == user_id)
+                .order_by(Transaction.TransactionDate.desc())
+            )
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+    async def get_user_transactions(self, user_id: int) -> User:
+        async with self.db.get_session() as session:
+            stmt = (
+                select(User)
+                .options(
+                    joinedload(User.customer),
+                    joinedload(User.Staff),
+                    joinedload(User.transactions)
+                    .joinedload(Transaction.account)
+                    .joinedload(Account.account_type),
+                    joinedload(User.transactions)
+                    .joinedload(Transaction.transaction_type),
+                    joinedload(User.transactions)
+                    .joinedload(Transaction.transaction_mode),
+                    joinedload(User.transactions)
+                    .joinedload(Transaction.transaction_status),
+                )
+                .filter(User.Id == user_id)
+            )
+            result = await session.execute(stmt)
+            return result.scalars().first()

@@ -21,3 +21,21 @@ class TransactionRequest:
         self.transaction_mode_id = transaction_mode_id
         self.transaction_status_id = transaction_status_id
         self.description = description
+
+
+class UserTransactionsRequest:
+    def __init__(
+            self,
+            user_id: int,
+            account_type_id: Optional[int] = None,
+            transaction_type_id: Optional[int] = None,
+            transaction_mode_id: Optional[int] = None,
+            account_number: Optional[str] = None,
+            transaction_status_id: Optional[int] = None,
+    ):
+        self.user_id = user_id
+        self.account_type_id = account_type_id
+        self.transaction_type_id = transaction_type_id
+        self.transaction_mode_id = transaction_mode_id
+        self.account_number = account_number
+        self.transaction_status_id = transaction_status_id
