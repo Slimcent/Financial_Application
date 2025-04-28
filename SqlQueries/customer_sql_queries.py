@@ -6,7 +6,7 @@ CUSTOMER_QUERIES = {
     "UPDATE_CUSTOMER": "UPDATE Customers SET Address = %s WHERE UserId = %s",
 
     "CREATE_ACCOUNT": """
-        INSERT INTO Accounts (CustomerId, AccountTypeId, AccountNumber, Balance) VALUES (%s, %s, %s, %s)
+        INSERT INTO Accounts (UserId, AccountTypeId, AccountNumber, Balance) VALUES (%s, %s, %s, %s, %s)
     """,
 
     "GET_Single_CUSTOMER": """
@@ -46,7 +46,7 @@ CUSTOMER_QUERIES = {
         FROM Customers c
         JOIN Users u ON u.Id = c.UserId
         LEFT JOIN Roles r ON u.RoleId = r.Id
-        LEFT JOIN Accounts a ON c.Id = a.CustomerId
+        LEFT JOIN Accounts a ON c.UserId = a.UserId
         LEFT JOIN AccountTypes at ON a.AccountTypeId = at.Id
         WHERE c.UserId = %s;
     """,
@@ -65,7 +65,7 @@ CUSTOMER_QUERIES = {
     """,
 
     "GET_CUSTOMER_ACCOUNT_TYPES": """
-        SELECT AccountTypeId FROM Accounts WHERE CustomerId = %s
+        SELECT AccountTypeId FROM Accounts WHERE UserId = %s
     """,
 
     "GET_ALL_CUSTOMERS": """
@@ -88,7 +88,7 @@ CUSTOMER_QUERIES = {
         FROM Customers c
         JOIN Users u ON u.Id = c.UserId
         LEFT JOIN Roles r ON u.RoleId = r.Id
-        LEFT JOIN Accounts a ON c.Id = a.CustomerId
+        LEFT JOIN Accounts a ON c.UserId = a.UserId
         LEFT JOIN AccountTypes at ON a.AccountTypeId = at.Id
         ORDER BY u.LastName, at.Id;
         """

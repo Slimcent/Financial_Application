@@ -51,7 +51,7 @@ class CustomerService:
                 # Insert into Customers table
                 await cursor.execute(CUSTOMER_QUERIES["CREATE_CUSTOMER"],
                                      (user_id, customer_request.address))
-                customer_id = cursor.lastrowid  # Get the generated CustomerId
+                customer_id = cursor.lastrowid
 
                 if not customer_id:
                     raise Exception("Failed to create customer record")
@@ -60,7 +60,7 @@ class CustomerService:
 
                 # Insert into Accounts table
                 await cursor.execute(ACCOUNT_QUERIES["CREATE_ACCOUNT"],
-                                     (customer_id, customer_request.account_type_id, account_number, 0.0))
+                                     (user_id, customer_request.account_type_id, account_number, 0.0))
 
                 await connection.commit()
 
@@ -82,7 +82,7 @@ class CustomerService:
 
         try:
             async with connection.cursor(DictCursor) as cursor:
-                # Fetch the existing customer details
+                # Get the existing customer details
                 await cursor.execute(CUSTOMER_QUERIES["GET_Single_CUSTOMER"], (user_id,))
                 customer = await cursor.fetchone()
 
@@ -272,39 +272,39 @@ class CustomerService:
         finally:
             await self.database_connection.release_connection(connection)
 
-    async def add_or_update_account_type(self, customer_id: int, account_type_id: int) -> bool:
+    async def add_or_update_account_type(self, user_id: int, account_type_id: int) -> bool:
         connection = await self.database_connection.get_connection()
         if not connection:
             return False
 
         try:
             async with connection.cursor(DictCursor) as cursor:
-                logger.info(f"Getting all existing account types for user {customer_id}...")
-                await cursor.execute(CUSTOMER_QUERIES["GET_CUSTOMER_ACCOUNT_TYPES"], (customer_id,))
+                logger.info(f"Getting all existing account types for user {user_id}...")
+                await cursor.execute(CUSTOMER_QUERIES["GET_CUSTOMER_ACCOUNT_TYPES"], (user_id,))
                 existing_account_types = {row["AccountTypeId"] for row in await cursor.fetchall()}
 
                 if not existing_account_types:
-                    logger.warning(f"Customer with customer Id {customer_id} does not exist.")
+                    logger.warning(f"Customer with user Id {user_id} does not exist.")
                     return False
 
                 account_number = await generate_account_number(account_type_id=account_type_id)
 
                 if account_type_id in existing_account_types:
-                    logger.info(f"Account type {account_type_id} already exists for customer {customer_id}. "
+                    logger.info(f"Account type {account_type_id} already exists for customer {user_id}. "
                                 f"No action needed.")
                     return True
 
                 # If account type does not exist, insert it
-                logger.info(f"Adding new account type {account_type_id} for customer {customer_id}...")
-                await cursor.execute(CUSTOMER_QUERIES["CREATE_ACCOUNT"], (customer_id, account_type_id,
+                logger.info(f"Adding new account type {account_type_id} for user {user_id}...")
+                await cursor.execute(CUSTOMER_QUERIES["CREATE_ACCOUNT"], (user_id, account_type_id,
                                                                           account_number, 0.0))
                 await connection.commit()
 
-                logger.info(f"Account type {account_type_id} successfully added for customer {customer_id}.")
+                logger.info(f"Account type {account_type_id} successfully added for user {user_id}.")
                 return True
 
         except Exception as e:
-            logger.error(f"Error adding account type for customer {customer_id}: {e}", exc_info=True)
+            logger.error(f"Error adding account type for user {user_id}: {e}", exc_info=True)
             await connection.rollback()
             return False
 

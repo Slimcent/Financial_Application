@@ -21,7 +21,7 @@ class TransactionRepository:
     def __init__(self):
         self.db = Database()
 
-    async def get_customer_accounts(self, customer_id: int, account_type_id: int):
+    async def get_customer_accounts(self, user_id: int, account_type_id: int):
         async with self.db.get_session() as session:
             result = await session.execute(
                 select(Account)
@@ -30,7 +30,7 @@ class TransactionRepository:
                     joinedload(Account.account_type)
                 )
                 .filter(
-                    Account.CustomerId == customer_id,
+                    Account.CustomerId == user_id,
                     Account.AccountTypeId == account_type_id
                 )
             )

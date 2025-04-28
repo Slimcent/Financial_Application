@@ -21,9 +21,9 @@ class TransactionService:
         self.constants = AppConstants
         self.db = Database()
 
-    async def get_customer_account_details(self, customer_id: int, account_type_id: int) -> AccountResponse:
+    async def get_customer_account_details(self, user_id: int, account_type_id: int) -> AccountResponse:
         print("Transaction service")
-        account = await self.transaction_repository.get_customer_accounts(customer_id, account_type_id)
+        account = await self.transaction_repository.get_customer_accounts(user_id, account_type_id)
 
         if not account:
             raise ValueError("Account not found.")
