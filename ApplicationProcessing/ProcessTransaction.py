@@ -16,7 +16,7 @@ class ProcessTransaction:
         try:
             print("Beginning transaction process")
 
-            # customer_account = await self.transaction_application.get_customer_account_details(5, 1)
+            # customer_account = await self.transaction_application.get_customer_account(6, 1)
             # if customer_account:
             #     print(customer_account)
             # else:
@@ -40,31 +40,32 @@ class ProcessTransaction:
             # else:
             #     print("Account not found.")
 
-            # fund_account = await self.transaction_application.fund_account("2606387058", 7000)
+            # fund_account = await self.transaction_application.fund_account("2684681945", 3500)
             # if fund_account is not None:
             #     print(f"Account balance: {fund_account}")
             # else:
             #     print("Account funding failed")
 
-            user_transactions = await self.transaction_application.get_user_transactions(5)
-            if user_transactions is not None:
-                print(f"{user_transactions}")
-            else:
-                print("No transactions found")
-
-            # request = UserTransactionsRequest(
-            #     user_id=6,
-            #     account_type_id=2,
-            #     transaction_type_id=None,
-            #     transaction_mode_id=None,
-            #     account_number=None,
-            #     transaction_status_id=None
-            # )
-            # filter_user_transactions = await self.transaction_application.filter_user_transactions(request)
-            # if filter_user_transactions is not None:
-            #     print(f"{filter_user_transactions}")
+            # user_transactions = await self.transaction_application.get_user_transactions(12)
+            # if user_transactions is not None:
+            #     print(f"{user_transactions}")
             # else:
             #     print("No transactions found")
+
+            request = UserTransactionsRequest(
+                user_id=12,
+                account_type_id=1,
+                transaction_type_id=None,
+                transaction_mode_id=None,
+                account_number=None,
+                transaction_status_id=None
+            )
+
+            filter_user_transactions = await self.transaction_application.filter_user_transactions(request)
+            if filter_user_transactions is not None:
+                print(f"{filter_user_transactions}")
+            else:
+                print("No transactions found")
 
         finally:
             await self.db.dispose()

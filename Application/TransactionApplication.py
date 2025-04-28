@@ -13,10 +13,10 @@ class TransactionApplication:
         self.transaction_repo = transaction_repo
         self.transaction_service = transaction_service
 
-    async def get_customer_account_details(self, user_id: int, account_type_id: int) -> dict:
+    async def get_customer_account(self, user_id: int, account_type_id: int) -> dict:
         try:
             print("Transaction application")
-            response = await self.transaction_service.get_customer_account_details(user_id, account_type_id)
+            response = await self.transaction_service.get_customer_account(user_id, account_type_id)
             if response is None:
                 logger.error("Failed to get customer accounts.")
                 return None
@@ -64,10 +64,11 @@ def _convert_account_response_to_dict(account_response: AccountResponse) -> dict
     accounts_list = []
     for account in account_response.accounts:
         account_dict = {
+            "account_id": account.account_id,
             "account_number": account.account_number,
             "balance": account.balance,
+            "account_type_id": account.account_type_id if account.account_type else None,
             "account_type": account.account_type if account.account_type else None,
-            "account_type_id": account.account_type if account.account_type else None,
         }
         accounts_list.append(account_dict)
 

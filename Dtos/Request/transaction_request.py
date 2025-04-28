@@ -11,9 +11,11 @@ class TransactionRequest:
             transaction_type_id: int,
             transaction_mode_id: int,
             transaction_status_id: int,
+            sender_id: Optional[int] = None,
             description: Optional[str] = None
     ):
         self.user_id = user_id
+        self.sender_id = sender_id
         self.account_id = account_id
         self.account_number = account_number
         self.amount = amount

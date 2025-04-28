@@ -15,9 +15,11 @@ class Transaction(BaseEntity):
     TransactionDate = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     Description = Column(String(255), nullable=True)
     UserId = Column(Integer, ForeignKey("Users.Id"), nullable=False)
+    SenderId = Column(Integer, ForeignKey("Users.Id"), nullable=True)
 
     account = relationship("Account", back_populates="transactions")
     transaction_type = relationship("TransactionType")
     transaction_mode = relationship("TransactionMode")
     transaction_status = relationship("TransactionStatus")
-    user = relationship("User", back_populates="transactions")
+    user = relationship("User", back_populates="transactions", foreign_keys=[UserId])
+    sender = relationship("User", foreign_keys=[SenderId], backref="sent_transactions")

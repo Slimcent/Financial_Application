@@ -21,31 +21,31 @@ class TransactionRepository:
     def __init__(self):
         self.db = Database()
 
-    async def get_customer_accounts(self, user_id: int, account_type_id: int):
+    async def get_customer_account(self, user_id: int, account_type_id: int):
         async with self.db.get_session() as session:
             result = await session.execute(
                 select(Account)
                 .options(
-                    joinedload(Account.customer).joinedload(Customer.user),
+                    joinedload(Account.user).joinedload(User.customer),
                     joinedload(Account.account_type)
                 )
                 .filter(
-                    Account.CustomerId == user_id,
+                    Account.UserId == user_id,
                     Account.AccountTypeId == account_type_id
                 )
             )
 
             return result.scalars().first()
 
-    async def get_customer_accounts_with_user_id(self, user_id: int) -> Optional[Customer]:
+    async def get_customer_accounts_with_user_id(self, user_id: int) -> Optional[User]:
         async with self.db.get_session() as session:
             stmt = (
-                select(Customer)
+                select(User)
                 .options(
-                    joinedload(Customer.accounts).joinedload(Account.account_type),
-                    joinedload(Customer.user)
+                    joinedload(User.accounts).joinedload(Account.account_type),
+                    joinedload(User.customer)
                 )
-                .filter(Customer.UserId == user_id)
+                .filter(User.Id == user_id)
             )
             result = await session.execute(stmt)
             return result.scalars().first()
@@ -56,7 +56,7 @@ class TransactionRepository:
                 select(Account)
                 .options(
                     joinedload(Account.account_type),
-                    joinedload(Account.customer).joinedload(Customer.user)
+                    joinedload(Account.user).joinedload(User.customer)
                 )
                 .filter(Account.AccountNumber == account_number)
             )
@@ -87,6 +87,7 @@ class TransactionRepository:
                 TransactionModeId=transaction_request.transaction_mode_id,
                 TransactionStatusId=transaction_request.transaction_status_id,
                 Amount=transaction_request.amount,
+                SenderId=transaction_request.sender_id,
                 Description=transaction_request.description
             )
 

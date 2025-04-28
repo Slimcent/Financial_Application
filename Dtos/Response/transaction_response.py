@@ -17,6 +17,8 @@ class TransactionsResponse:
             transaction_status: str,
             transaction_date: datetime,
             description: None,
+            sender_id: int = None,
+            sender: str = None,
     ):
 
         self.account_id = account_id
@@ -32,6 +34,8 @@ class TransactionsResponse:
         self.transaction_status = transaction_status
         self.transaction_date = transaction_date
         self.description = description
+        self.sender_id = sender_id
+        self.sender = sender
 
     def __repr__(self):
         return (
@@ -47,6 +51,8 @@ class TransactionsResponse:
             f"transaction_status_id='{self.transaction_status_id}' "
             f"transaction_status='{self.transaction_status}' "
             f"transaction_date='{self.transaction_date}' "
-            f"description='{self.description}'"
+            f"description='{self.description}' "
+            f"sender_id='{self.sender_id}' "
+            f"sender='{self.sender}'"
             f")"
         )

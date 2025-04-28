@@ -21,23 +21,22 @@ class TransactionService:
         self.constants = AppConstants
         self.db = Database()
 
-    async def get_customer_account_details(self, user_id: int, account_type_id: int) -> AccountResponse:
+    async def get_customer_account(self, user_id: int, account_type_id: int) -> AccountResponse:
         print("Transaction service")
-        account = await self.transaction_repository.get_customer_accounts(user_id, account_type_id)
+        account = await self.transaction_repository.get_customer_account(user_id, account_type_id)
 
         if not account:
             raise ValueError("Account not found.")
 
-        print("Done with repo")
-        customer = account.customer
-        user = customer.user
+        user = account.user
+        customer = account.user.customer
 
         account_response = AccountsResponse(
             account_id=account.Id,
             account_number=account.AccountNumber,
             balance=float(account.Balance),
-            account_type=account.account_type.Type,
-            account_type_id=account.AccountTypeId
+            account_type_id=account.account_type.Id,
+            account_type=account.account_type.Type
         )
 
         print("Finished mapping")
@@ -49,16 +48,15 @@ class TransactionService:
             first_name=user.FirstName,
             email=user.Email,
             accounts=[account_response],
-            balance=float(account.Balance)
+            balance=float(account.Balance),
+            total_balance=float(account.Balance)
         )
 
     async def get_customer_accounts_with_user_id(self, user_id: int) -> AccountResponse:
-        customer = await self.transaction_repository.get_customer_accounts_with_user_id(user_id)
+        user: User = await self.transaction_repository.get_customer_accounts_with_user_id(user_id)
 
-        if not customer:
-            raise ValueError("Customer not found.")
-
-        user = customer.user
+        if not user:
+            raise ValueError("user not found.")
 
         account_responses = [
             AccountsResponse(
@@ -68,17 +66,18 @@ class TransactionService:
                 account_type_id=account.AccountTypeId,
                 account_type=account.account_type.Type
             )
-            for account in customer.accounts
+            for account in user.accounts
         ]
 
-        total_balance = sum(account.Balance for account in customer.accounts)
+        total_balance = sum(account.Balance for account in user.accounts)
 
         return AccountResponse(
             user_id=user.Id,
-            customer_id=customer.Id,
+            customer_id=user.customer.Id,
             last_name=user.LastName,
             first_name=user.FirstName,
             email=user.Email,
+            address=user.customer.Address,
             accounts=account_responses,
             total_balance=total_balance
         )
@@ -107,16 +106,13 @@ class TransactionService:
         if not account:
             print(f"Account with number {account_number} does not exist")
 
-        if not account.customer or not account.customer.user:
-            print("Associated customer not found")
-
-        if not account.customer.user:
+        if not account.user:
             print("Associated user not found")
 
-        if not account.customer.user.Id:
+        if not account.user.Id:
             print("User id can not be null")
 
-        print(f"User id = {account.customer.user.Id}")
+        print(f"User id = {account.user.Id}")
 
         try:
             async with self.db.get_session() as session:
@@ -124,13 +120,14 @@ class TransactionService:
                     await self.transaction_repository.update_account_balance(account, amount, session=session)
 
                     transaction_request = TransactionRequest(
-                        user_id=account.customer.UserId,
+                        user_id=account.UserId,
                         account_id=account.Id,
                         account_number=account.AccountNumber,
                         amount=amount,
                         transaction_type_id=self.constants.DepositTransactionTypeId,
                         transaction_mode_id=self.constants.CreditTransactionModeId,
                         transaction_status_id=self.constants.CompletedTransactionStatusId,
+                        sender_id=account.UserId,
                         description=description
                     )
 
