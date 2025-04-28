@@ -19,4 +19,3 @@ class Account(BaseEntity):
     __table_args__ = (
         UniqueConstraint("UserId", "AccountTypeId", name="uq_user_account_type"),
     )
-

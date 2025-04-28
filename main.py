@@ -14,11 +14,11 @@ async def main():
         # staff = StaffApplication()
         # await staff.run_application()
 
-        # customer = CustomerApplication()
-        # await customer.run_application()
+        customer = CustomerApplication()
+        await customer.run_application()
 
-        transaction = ProcessTransaction()
-        await transaction.run_application()
+        # transaction = ProcessTransaction()
+        # await transaction.run_application()
 
         # account = ProcessAccount()
         # await account.run_application()

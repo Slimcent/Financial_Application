@@ -14,25 +14,25 @@ class CustomerApplication:
         self.customer_service = CustomerService(self.database_connection, self.user_service)
 
     async def run_application(self):
-        await self.create_customer(customer_request=CustomerRequest(
-            last_name="Mmeso",
-            first_name="Rhema",
-            address="PH",
-            email="mmeso@yopmail.com",
-            account_type_id=1
-        ))
+        # await self.create_customer(customer_request=CustomerRequest(
+        #     last_name="Jena",
+        #     first_name="Kol",
+        #     address="Lagos",
+        #     email="kol@yopmail.com",
+        #     account_type_id=2
+        # ))
 
-        # await self.update_customer(7, customer_request=CustomerRequest(
-        #     last_name="Ebuka",
-        #     first_name="Rhema",
-        #     email="ebus@yopmail.com",
+        # await self.update_customer(12, customer_request=CustomerRequest(
+        #     last_name="Jena",
+        #     first_name="Obi",
+        #     email="kol@yopmail.com",
         #     address="Abia",
         #     account_type_id=None
         # ))
 
         # await self.delete_customer(8)
-        # await self.get_customer_details(6)
-        # await self.add_or_update_customer_account_type(2, 2)
+        await self.get_customer_details(12)
+        # await self.add_or_update_customer_account_type(12, 1)
         # customers = await self.get_all_customers()
         # if customers:
         #     for customer in customers:
@@ -52,7 +52,7 @@ class CustomerApplication:
         result = await self.customer_service.update_customer(user_id, customer_request)
 
         if result:
-            logger.info(f"Staff with User ID {user_id} updated successfully.")
+            logger.info(f"Customer with User ID {user_id} updated successfully.")
         else:
             logger.warning(f"Failed to update staff with User ID {user_id}.")
 
@@ -82,9 +82,11 @@ class CustomerApplication:
         customer_responses = [
             {
                 "user_id": customer.user_id,
+                "customer_id": customer.customer_id,
                 "last_name": customer.last_name,
                 "first_name": customer.first_name,
                 "email": customer.email,
+                "address": customer.address,
                 "role_id": customer.role_id,
                 "role_name": customer.role_name,
                 "accounts": customer.accounts,
@@ -113,7 +115,9 @@ class CustomerApplication:
             f"Retrieved Customer Details:\n"
             f"Name: {customer.first_name} {customer.last_name}\n"
             f"User Id: {customer.user_id}\n"
+            f"Customer Id: {customer.customer_id}\n"
             f"Email: {customer.email}\n"
+            f"Address: {customer.address}\n"
             f"Role: {customer.role_name} (Role Id: {customer.role_id})\n"
             f"Active: {customer.active}\n"
             f"Created At: {customer.created_at}\n"

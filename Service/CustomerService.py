@@ -51,6 +51,7 @@ class CustomerService:
                 # Insert into Customers table
                 await cursor.execute(CUSTOMER_QUERIES["CREATE_CUSTOMER"],
                                      (user_id, customer_request.address))
+
                 customer_id = cursor.lastrowid
 
                 if not customer_id:
@@ -162,10 +163,12 @@ class CustomerService:
                 # Dictionary to group account types by UserId
                 customer_dict = defaultdict(lambda: {
                     "user_id": None,
+                    "customer_id": None,
                     "staff_id": None,
                     "first_name": None,
                     "last_name": None,
                     "email": None,
+                    "address": None,
                     "position": None,
                     "role_id": None,
                     "role_name": None,
@@ -180,9 +183,11 @@ class CustomerService:
                     if customer_dict[user_id]["user_id"] is None:
                         customer_dict[user_id].update({
                             "user_id": user_id,
+                            "customer_id": customer["CustomerId"],
                             "first_name": customer["FirstName"],
                             "last_name": customer["LastName"],
                             "email": customer["Email"],
+                            "address": customer["Address"],
                             "role_id": customer["RoleId"],
                             "role_name": customer["RoleName"],
                             "balance": str(customer["Balance"]),
@@ -201,9 +206,11 @@ class CustomerService:
                 customer_list = [
                     UserResponse(
                         user_id=data["user_id"],
+                        customer_id=data["customer_id"],
                         first_name=data["first_name"],
                         last_name=data["last_name"],
                         email=data["email"],
+                        address=data["address"],
                         position=data["position"],
                         role_id=data["role_id"],
                         role_name=data["role_name"],
@@ -252,10 +259,12 @@ class CustomerService:
 
                 first_row = customer_rows[0]
                 user_response = UserResponse(
-                    user_id=first_row["CustomerId"],
+                    user_id=first_row["UserId"],
+                    customer_id=first_row["CustomerId"],
                     last_name=first_row["LastName"],
                     first_name=first_row["FirstName"],
                     email=first_row["Email"],
+                    address=first_row["Address"],
                     role_id=first_row["RoleId"],
                     role_name=first_row["RoleName"],
                     accounts=accounts,

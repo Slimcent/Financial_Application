@@ -17,7 +17,7 @@ ACCOUNT_QUERIES = {
     """,
 
     "CREATE_ACCOUNT": """
-        INSERT INTO Accounts (CustomerId, AccountTypeId, AccountNumber, Balance) 
+        INSERT INTO Accounts (UserId, AccountTypeId, AccountNumber, Balance)
         VALUES (%s, %s, %s, %s)
     """
 }

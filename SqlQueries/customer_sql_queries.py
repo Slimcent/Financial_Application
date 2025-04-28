@@ -6,13 +6,14 @@ CUSTOMER_QUERIES = {
     "UPDATE_CUSTOMER": "UPDATE Customers SET Address = %s WHERE UserId = %s",
 
     "CREATE_ACCOUNT": """
-        INSERT INTO Accounts (UserId, AccountTypeId, AccountNumber, Balance) VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO Accounts (UserId, AccountTypeId, AccountNumber, Balance) VALUES (%s, %s, %s, %s)
     """,
 
     "GET_Single_CUSTOMER": """
         SELECT 
             c.Id AS CustomerId,
             c.UserId,
+            c.Address,
             u.FirstName,
             u.LastName,
             u.Email,
@@ -31,6 +32,7 @@ CUSTOMER_QUERIES = {
             c.Id AS CustomerId,
             c.Address,
             c.UserId,
+            c.Address,
             u.FirstName,
             u.LastName,
             u.Email,
@@ -73,6 +75,7 @@ CUSTOMER_QUERIES = {
             c.Id AS CustomerId,
             c.Address,
             c.UserId,
+            c.Address,
             u.FirstName,
             u.LastName,
             u.Email,
