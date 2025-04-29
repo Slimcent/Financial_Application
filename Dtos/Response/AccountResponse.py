@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Dict
 
 from Dtos.Response import AccountsResponse
-from Dtos.Response.transaction_response import TransactionsResponse
+from Dtos.Response.transaction_response import TransactionResponse
 
 
 @dataclass
@@ -16,7 +16,7 @@ class AccountResponse:
             address: str = None,
             email: str = None,
             accounts: List[AccountsResponse] = None,
-            transactions: List[TransactionsResponse] = None,
+            transactions: List[TransactionResponse] = None,
             balance: float = None,
             total_balance: float = None,
     ):

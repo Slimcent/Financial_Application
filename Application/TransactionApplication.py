@@ -1,8 +1,10 @@
 from typing import Optional, Dict, Any
 
-from Dtos.Request.transaction_request import UserTransactionsRequest
+from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest
 from Dtos.Response.AccountResponse import AccountResponse
 from Dtos.Response.AccountsResponse import AccountsResponse
+from Dtos.Response.paged_response import PagedResponse
+from Dtos.Response.transaction_response import TransactionsResponse
 from Repository.transaction_repository import TransactionRepository
 from Service.transaction_service import TransactionService
 from logger import logger
@@ -58,6 +60,9 @@ class TransactionApplication:
 
     async def filter_user_transactions(self, request: UserTransactionsRequest) -> Optional[AccountResponse]:
         return await self.transaction_service.filter_user_transactions(request)
+
+    async def get_all_transactions_paginated(self, request: TransactionsRequest) -> PagedResponse[TransactionsResponse]:
+        return await self.transaction_service.get_all_transactions_paginated(request)
 
 
 def _convert_account_response_to_dict(account_response: AccountResponse) -> dict:

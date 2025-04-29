@@ -1,5 +1,5 @@
 from Application.TransactionApplication import TransactionApplication
-from Dtos.Request.transaction_request import UserTransactionsRequest
+from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest
 from Repository.transaction_repository import TransactionRepository
 from Service.transaction_service import TransactionService
 from database_orm_async import Database
@@ -52,20 +52,35 @@ class ProcessTransaction:
             # else:
             #     print("No transactions found")
 
-            request = UserTransactionsRequest(
-                user_id=12,
-                account_type_id=1,
+            # request = UserTransactionsRequest(
+            #     user_id=12,
+            #     account_type_id=1,
+            #     transaction_type_id=None,
+            #     transaction_mode_id=None,
+            #     account_number=None,
+            #     transaction_status_id=None
+            # )
+            #
+            # filter_user_transactions = await self.transaction_application.filter_user_transactions(request)
+            # if filter_user_transactions is not None:
+            #     print(f"{filter_user_transactions}")
+            # else:
+            #     print("No transactions found")
+
+            request = TransactionsRequest(
+                user_id=None,
+                sender_id=None,
+                account_type_id=2,
                 transaction_type_id=None,
                 transaction_mode_id=None,
                 account_number=None,
-                transaction_status_id=None
+                transaction_status_id=None,
+                search_term=None,
             )
 
-            filter_user_transactions = await self.transaction_application.filter_user_transactions(request)
-            if filter_user_transactions is not None:
-                print(f"{filter_user_transactions}")
-            else:
-                print("No transactions found")
+            all_transactions_paginated = await self.transaction_application.get_all_transactions_paginated(request)
+            if all_transactions_paginated is not None:
+                print(f"{all_transactions_paginated}")
 
         finally:
             await self.db.dispose()

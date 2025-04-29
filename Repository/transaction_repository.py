@@ -1,6 +1,3 @@
-from decimal import Decimal
-
-from Dtos.Request.transaction_request import TransactionRequest
 from models.user import User
 from models.Roles import Role
 from sqlalchemy import select
@@ -9,12 +6,14 @@ from typing import List, Optional
 from models.accounts import Account
 from models.customer import Customer
 from database_orm_async import Database
+from sqlalchemy.sql.operators import or_
 from models.transaction import Transaction
 from models.account_type import AccountType
 from models.transaction_type import TransactionType
 from sqlalchemy.orm import selectinload, joinedload
 from models.transaction_mode import TransactionMode
 from models.transaction_status import TransactionStatus
+from Dtos.Request.transaction_request import TransactionRequest
 
 
 class TransactionRepository:
@@ -101,24 +100,6 @@ class TransactionRepository:
             print(f"Transaction creation failed: {e}")
             raise
 
-    async def get__all_user_transactions(self, user_id: int) -> List[Transaction]:
-        async with self.db.get_session() as session:
-            stmt = (
-                select(Transaction)
-                .options(
-                    joinedload(Transaction.account).joinedload(Account.account_type),
-                    joinedload(Transaction.transaction_type),
-                    joinedload(Transaction.transaction_mode),
-                    joinedload(Transaction.transaction_status),
-                    joinedload(Transaction.user).joinedload(User.customer),
-                    joinedload(Transaction.user).joinedload(User.Staff),
-                )
-                .filter(Transaction.UserId == user_id)
-                .order_by(Transaction.TransactionDate.desc())
-            )
-            result = await session.execute(stmt)
-            return result.scalars().all()
-
     async def get_user_transactions(self, user_id: int) -> User:
         async with self.db.get_session() as session:
             stmt = (
@@ -140,3 +121,55 @@ class TransactionRepository:
             )
             result = await session.execute(stmt)
             return result.scalars().first()
+
+    async def get_all_transactions(self, request) -> List[Transaction]:
+        async with self.db.get_session() as session:
+            stmt = (
+                select(Transaction)
+                .join(Transaction.account)
+                .join(Transaction.user)
+                .options(
+                    joinedload(Transaction.account).joinedload(Account.account_type),
+                    joinedload(Transaction.transaction_type),
+                    joinedload(Transaction.transaction_mode),
+                    joinedload(Transaction.transaction_status),
+                    joinedload(Transaction.user).joinedload(User.customer),
+                    joinedload(Transaction.user).joinedload(User.Staff),
+                    joinedload(Transaction.sender)
+                )
+            )
+
+            filters = []
+
+            if request.user_id:
+                filters.append(Transaction.UserId == request.user_id)
+            if request.sender_id:
+                filters.append(Transaction.SenderId == request.sender_id)
+            if request.account_type_id:
+                filters.append(Account.AccountTypeId == request.account_type_id)
+            if request.transaction_type_id:
+                filters.append(Transaction.TransactionTypeId == request.transaction_type_id)
+            if request.transaction_mode_id:
+                filters.append(Transaction.TransactionModeId == request.transaction_mode_id)
+            if request.transaction_status_id:
+                filters.append(Transaction.TransactionStatusId == request.transaction_status_id)
+            if request.account_number:
+                filters.append(Account.AccountNumber.ilike(f"%{request.account_number}%"))
+
+            print("finished filtering")
+
+            if request.search_term:
+                filters.append(
+                    or_(
+                        User.FirstName.ilike(f"%{request.search_term}%"),
+                        User.LastName.ilike(f"%{request.search_term}%"),
+                        User.Email.ilike(f"%{request.search_term}%"),
+                        Account.AccountNumber.ilike(f"%{request.search_term}%"),
+                    )
+                )
+
+            print("finished search")
+
+            stmt = stmt.filter(*filters).order_by(Transaction.TransactionDate.desc())
+            result = await session.execute(stmt)
+            return result.scalars().all()
