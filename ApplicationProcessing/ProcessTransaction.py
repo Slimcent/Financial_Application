@@ -67,10 +67,25 @@ class ProcessTransaction:
             # else:
             #     print("No transactions found")
 
+            # request = TransactionsRequest(
+            #     user_id=None,
+            #     sender_id=None,
+            #     account_type_id=None,
+            #     transaction_type_id=None,
+            #     transaction_mode_id=None,
+            #     account_number=None,
+            #     transaction_status_id=None,
+            #     search_term=None,
+            # )
+            #
+            # all_transactions_paginated = await self.transaction_application.get_all_transactions_paginated(request)
+            # if all_transactions_paginated is not None:
+            #     print(f"{all_transactions_paginated}")
+
             request = TransactionsRequest(
                 user_id=None,
                 sender_id=None,
-                account_type_id=2,
+                account_type_id=None,
                 transaction_type_id=None,
                 transaction_mode_id=None,
                 account_number=None,
@@ -78,9 +93,9 @@ class ProcessTransaction:
                 search_term=None,
             )
 
-            all_transactions_paginated = await self.transaction_application.get_all_transactions_paginated(request)
-            if all_transactions_paginated is not None:
-                print(f"{all_transactions_paginated}")
+            all_transactions_non_paginated = await self.transaction_application.get_all_transactions_non_paginated(request)
+            if all_transactions_non_paginated is not None:
+                print(f"{all_transactions_non_paginated}")
 
         finally:
             await self.db.dispose()

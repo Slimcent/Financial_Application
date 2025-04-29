@@ -210,6 +210,49 @@ class TransactionService:
 
         return Pagination.paginate(request.page, request.page_size, response_list)
 
+    async def get_all_transactions_non_paginated(self, request: TransactionsRequest) -> List[TransactionsResponse]:
+        transactions = await self.transaction_repository.get_all_transactions(request)
+
+        response_list: List[TransactionsResponse] = []
+
+        for transaction in transactions:
+            user = transaction.user
+            account = transaction.account
+            customer = getattr(user, "customer", None)
+            staff = getattr(user, "staff", None)
+
+            response = TransactionsResponse(
+                user_id=user.Id,
+                first_name=user.FirstName,
+                last_name=user.LastName,
+                email=user.Email,
+                address=user.customer.Address if customer else None,
+                customer_id=customer.Id if customer else None,
+                staff_id=staff.id if staff else None,
+                account_id=account.Id,
+                account_number=account.AccountNumber,
+                amount=transaction.Amount,
+                account_type_id=account.account_type.Id,
+                account_type=account.account_type.Type if account.account_type else None,
+                transaction_type_id=transaction.TransactionTypeId,
+                transaction_type=transaction.transaction_type.Name if transaction.transaction_type else None,
+                transaction_mode_id=transaction.TransactionModeId,
+                transaction_mode=transaction.transaction_mode.Name if transaction.transaction_mode else None,
+                transaction_status_id=transaction.TransactionStatusId,
+                transaction_status=transaction.transaction_status.Name if transaction.transaction_status else None,
+                transaction_date=transaction.TransactionDate,
+                description=transaction.Description,
+                sender_id=transaction.SenderId,
+                sender=f"{transaction.sender.FirstName} {transaction.sender.LastName}" if transaction.sender else None
+            )
+
+            response_list.append(response)
+
+        for r in response_list:
+            print(repr(r))
+
+        return response_list
+
 
 async def filter_transactions(user: User, request: UserTransactionsRequest) -> User:
     if request.account_type_id is not None:
