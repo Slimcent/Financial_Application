@@ -2,7 +2,7 @@ from typing import Optional, List
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from Dtos.Request.transaction_request import TransactionRequest, TransactionsRequest
+from Dtos.Request.transaction_request import TransactionRequest, TransactionsRequest, FundsTransferRequest
 from Dtos.Request.transaction_request import UserTransactionsRequest
 from Dtos.Response.AccountResponse import AccountResponse
 from Dtos.Response.AccountsResponse import AccountsResponse
@@ -252,6 +252,88 @@ class TransactionService:
             print(repr(r))
 
         return response_list
+
+    async def transfer_funds(self, request: FundsTransferRequest) -> AccountsResponse:
+        if request.amount <= 0:
+            print("Amount must be greater than zero")
+
+        if not request.sender_account_number:
+            print("Sender account number is required")
+
+        if not request.receiver_account_number:
+            print("Sender account number is required")
+
+        try:
+            async with self.db.get_session() as session:
+                async with session.begin():
+
+                    print("get sender account")
+                    sender_account = await self.transaction_repository.get_account_by_account_number(
+                        request.sender_account_number, session=session)
+
+                    if not sender_account:
+                        print("Sender account not found")
+
+                    if not sender_account.user.Active:
+                        print("Sender account not active")
+
+                    if sender_account.Balance < request.amount:
+                        print("Insufficient funds")
+
+                    print("retrieved sender account")
+
+                    receiver_account = await self.transaction_repository.get_account_by_account_number(
+                        request.receiver_account_number, session=session)
+
+                    if not receiver_account:
+                        print("Receiver account not found")
+
+                    if sender_account.AccountNumber == receiver_account.AccountNumber:
+                        print("You cannot transfer money to yourself")
+
+                    await self.transaction_repository.update_account_balance(sender_account, -request.amount, session)
+
+                    await self.transaction_repository.update_account_balance(receiver_account, request.amount, session)
+
+                    transaction_requests = [
+                        TransactionRequest(
+                            user_id=sender_account.UserId,
+                            account_id=sender_account.Id,
+                            account_number=sender_account.AccountNumber,
+                            amount=request.amount,
+                            transaction_type_id=self.constants.TransferTransactionTypeId,
+                            transaction_mode_id=self.constants.DebitTransactionModeId,
+                            transaction_status_id=self.constants.CompletedTransactionStatusId,
+                            sender_id=sender_account.UserId,
+                            description=request.description
+                        ),
+
+                        TransactionRequest(
+                            user_id=receiver_account.UserId,
+                            account_id=receiver_account.Id,
+                            account_number=receiver_account.AccountNumber,
+                            transaction_type_id=self.constants.TransferTransactionTypeId,
+                            transaction_mode_id=self.constants.CreditTransactionModeId,
+                            transaction_status_id=self.constants.CompletedTransactionStatusId,
+                            amount=request.amount,
+                            sender_id=sender_account.UserId,
+                            description=request.description,
+                        )
+                    ]
+
+                    await self.transaction_repository.create_transactions(transaction_requests, session)
+
+                    return AccountsResponse(
+                        account_id=sender_account.Id,
+                        account_number=sender_account.AccountNumber,
+                        balance=sender_account.Balance,
+                        account_type_id=sender_account.AccountTypeId,
+                        account_type=sender_account.account_type.Type
+                    )
+
+        except Exception as e:
+            print(f"Transfer failed: {e}")
+            raise
 
 
 async def filter_transactions(user: User, request: UserTransactionsRequest) -> User:

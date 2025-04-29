@@ -9,10 +9,10 @@ class AccountsResponse:
     def __repr__(self):
         return (
             f"AccountsResponse("
-            f"account_id={self.account_id}, "
-            f"account_number='{self.account_number}', "
-            f"balance={self.balance}, "
-            f"account_type_id={self.account_type_id}, "
+            f"\n account_id={self.account_id},\n "
+            f"account_number='{self.account_number}',\n "
+            f"balance={self.balance},\n "
+            f"account_type_id={self.account_type_id},\n "
             f"account_type='{self.account_type}'"
             f")"
         )

@@ -1,5 +1,5 @@
 from Application.TransactionApplication import TransactionApplication
-from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest
+from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest, FundsTransferRequest
 from Repository.transaction_repository import TransactionRepository
 from Service.transaction_service import TransactionService
 from database_orm_async import Database
@@ -28,11 +28,11 @@ class ProcessTransaction:
             # else:
             #     print("No customer information found.")
 
-            # account_details = await self.transaction_application.get_account_details_by_account_number("2606387058")
-            # if account_details:
-            #     print(vars(account_details))
-            # else:
-            #     print("Account not found.")
+            account_details = await self.transaction_application.get_account_details_by_account_number("2606387058")
+            if account_details:
+                print(vars(account_details))
+            else:
+                print("Account not found.")
 
             # account_balance = await self.transaction_application.get_account_balance_by_account_number("2606387058")
             # if account_balance is not None:
@@ -82,20 +82,31 @@ class ProcessTransaction:
             # if all_transactions_paginated is not None:
             #     print(f"{all_transactions_paginated}")
 
-            request = TransactionsRequest(
-                user_id=None,
-                sender_id=None,
-                account_type_id=None,
-                transaction_type_id=None,
-                transaction_mode_id=None,
-                account_number=None,
-                transaction_status_id=None,
-                search_term=None,
-            )
+            # request = TransactionsRequest(
+            #     user_id=None,
+            #     sender_id=None,
+            #     account_type_id=None,
+            #     transaction_type_id=None,
+            #     transaction_mode_id=None,
+            #     account_number=None,
+            #     transaction_status_id=None,
+            #     search_term=None,
+            # )
+            #
+            # all_transactions_non_paginated = await self.transaction_application.get_all_transactions_non_paginated(request)
+            # if all_transactions_non_paginated is not None:
+            #     print(f"{all_transactions_non_paginated}")
 
-            all_transactions_non_paginated = await self.transaction_application.get_all_transactions_non_paginated(request)
-            if all_transactions_non_paginated is not None:
-                print(f"{all_transactions_non_paginated}")
+            # request = FundsTransferRequest(
+            #     amount=300,
+            #     sender_account_number="2606387058",
+            #     receiver_account_number="2684681945",
+            #     description="Spencer",
+            # )
+            #
+            # transfer_funds = await self.transaction_application.transfer_funds(request)
+            # if transfer_funds is not None:
+            #     print(f"{transfer_funds}")
 
         finally:
             await self.db.dispose()

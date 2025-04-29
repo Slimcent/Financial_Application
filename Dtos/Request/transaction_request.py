@@ -70,3 +70,17 @@ class TransactionsRequest(PaginationRequest):
         self.transaction_mode_id = transaction_mode_id
         self.account_number = account_number
         self.transaction_status_id = transaction_status_id
+
+
+class FundsTransferRequest:
+    def __init__(
+            self,
+            amount: int = None,
+            sender_account_number: Optional[str] = None,
+            receiver_account_number: Optional[str] = None,
+            description: Optional[str] = None,
+    ):
+        self.amount = amount
+        self.sender_account_number = sender_account_number
+        self.receiver_account_number = receiver_account_number
+        self.description = description

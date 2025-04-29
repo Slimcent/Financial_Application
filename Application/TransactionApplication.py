@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
 
-from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest
+from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest, FundsTransferRequest
 from Dtos.Response.AccountResponse import AccountResponse
 from Dtos.Response.AccountsResponse import AccountsResponse
 from Dtos.Response.paged_response import PagedResponse
@@ -66,6 +66,9 @@ class TransactionApplication:
 
     async def get_all_transactions_non_paginated(self, request: TransactionsRequest) -> List[TransactionsResponse]:
         return await self.transaction_service.get_all_transactions_non_paginated(request)
+
+    async def transfer_funds(self, request: FundsTransferRequest) -> AccountsResponse:
+        return await self.transaction_service.transfer_funds(request)
 
 
 def _convert_account_response_to_dict(account_response: AccountResponse) -> dict:

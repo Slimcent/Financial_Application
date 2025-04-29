@@ -49,8 +49,8 @@ class TransactionRepository:
             result = await session.execute(stmt)
             return result.scalars().first()
 
-    async def get_account_by_account_number(self, account_number: str) -> Optional[Account]:
-        async with self.db.get_session() as session:
+    async def get_account_by_account_number(self, account_number: str, session=None) -> Optional[Account]:
+        if session is not None:
             stmt = (
                 select(Account)
                 .options(
@@ -61,6 +61,25 @@ class TransactionRepository:
             )
             result = await session.execute(stmt)
             return result.scalars().first()
+        else:
+            async with self.db.get_session() as new_session:
+                stmt = (
+                    select(Account)
+                    .options(
+                        joinedload(Account.account_type),
+                        joinedload(Account.user).joinedload(User.customer)
+                    )
+                    .filter(Account.AccountNumber == account_number)
+                )
+                result = await new_session.execute(stmt)
+                return result.scalars().first()
+
+    # async def get_account_by_account_number(self, account_number: str, session=None) -> Optional[Account]:
+    #     if session is None:
+    #         async with self.db.get_session() as session:
+    #             return await _get_account(account_number, session)
+    #     else:
+    #         return await _get_account(account_number, session)
 
     async def update_account_balance(self, account: Account, amount: float, session=None):
         try:
@@ -80,7 +99,7 @@ class TransactionRepository:
     async def create_transaction(self, transaction_request: TransactionRequest, session=None):
         try:
             transaction = Transaction(
-                UserId = transaction_request.user_id,
+                UserId=transaction_request.user_id,
                 AccountId=transaction_request.account_id,
                 TransactionTypeId=transaction_request.transaction_type_id,
                 TransactionModeId=transaction_request.transaction_mode_id,
@@ -98,6 +117,32 @@ class TransactionRepository:
                 session.add(transaction)
         except Exception as e:
             print(f"Transaction creation failed: {e}")
+            raise
+
+    async def create_transactions(self, transaction_requests: List[TransactionRequest], session=None):
+        try:
+            transactions = [
+                Transaction(
+                    UserId=req.user_id,
+                    AccountId=req.account_id,
+                    TransactionTypeId=req.transaction_type_id,
+                    TransactionModeId=req.transaction_mode_id,
+                    TransactionStatusId=req.transaction_status_id,
+                    Amount=req.amount,
+                    SenderId=req.sender_id,
+                    Description=req.description
+                )
+                for req in transaction_requests
+            ]
+
+            if session is None:
+                async with self.db.get_session() as session:
+                    session.add_all(transactions)
+                    await session.commit()
+            else:
+                session.add_all(transactions)
+        except Exception as e:
+            print(f"Batch transaction creation failed: {e}")
             raise
 
     async def get_user_transactions(self, user_id: int) -> User:
@@ -173,3 +218,16 @@ class TransactionRepository:
             stmt = stmt.filter(*filters).order_by(Transaction.TransactionDate.desc())
             result = await session.execute(stmt)
             return result.scalars().all()
+
+
+async def _get_account(self, account_number: str, session=None) -> Optional[Account]:
+    stmt = (
+        select(Account)
+        .options(
+            joinedload(Account.account_type),
+            joinedload(Account.user).joinedload(User.customer)
+        )
+        .filter(Account.AccountNumber == account_number)
+    )
+    result = await session.execute(stmt)
+    return result.scalars().first()
