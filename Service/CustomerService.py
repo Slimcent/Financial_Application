@@ -7,10 +7,12 @@ from Dtos.Request.UserRequest import UserRequest
 from Dtos.Response.UserResponse import UserResponse
 from Infrastructure.AppConstants import AppConstants
 from Dtos.Request.CustomerRequest import CustomerRequest
+from Dtos.Request.CustomerUpdateRequest import CustomerUpdateRequest
 from Utility.AccountNumber import generate_account_number
 from SqlQueries.account_sql_queries import ACCOUNT_QUERIES
 from Dtos.Request.UpdateUserRequest import UpdateUserRequest
 from SqlQueries.customer_sql_queries import CUSTOMER_QUERIES
+from SqlQueries.account_type_sql_queries import ACCOUNT_TYPE_QUERIES
 from Dtos.Response.AccountsResponse import AccountsResponse
 
 
@@ -21,6 +23,16 @@ class CustomerService:
         self.constants = AppConstants
 
     async def create_customer(self, customer_request: CustomerRequest):
+        # Built before any database work so an invalid request is raised to the caller
+        # instead of being logged as a database failure.
+        user_request = UserRequest(
+            last_name=customer_request.last_name,
+            first_name=customer_request.first_name,
+            email=customer_request.email,
+            password=customer_request.password,
+            role_id=self.constants.CustomerRoleId,
+        )
+
         connection = await self.database_connection.get_connection()
         if not connection:
             return None
@@ -29,17 +41,19 @@ class CustomerService:
             async with connection.cursor() as cursor:
                 await connection.begin()
 
+                # The account insert needs a valid account type; check it before the user is created
+                # so an unknown account type does not leave a user without a customer record.
+                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ACCOUNT_TYPE_BY_ID"],
+                                     (customer_request.account_type_id,))
+                if not await cursor.fetchone():
+                    logger.warning(f"Account type with Id {customer_request.account_type_id} does not exist. "
+                                   f"Customer {customer_request.email} was not created.")
+                    await connection.rollback()
+                    return None
+
                 account_number = await generate_account_number(customer_request.account_type_id)
 
                 # Create user first
-                user_request = UserRequest(
-                    last_name=customer_request.last_name,
-                    first_name=customer_request.first_name,
-                    email=customer_request.email,
-                    password="new_customer",
-                    role_id=self.constants.CustomerRoleId,
-                )
-
                 logger.info("Creating customer as user first")
                 user_id = await self.user_service.create_user(user_request)
 
@@ -76,7 +90,15 @@ class CustomerService:
         finally:
             await self.database_connection.release_connection(connection)
 
-    async def update_customer(self, user_id: int, customer_request: CustomerRequest):
+    async def update_customer(self, user_id: int, customer_request: CustomerUpdateRequest):
+        # Built before any database work so an invalid request is raised to the caller
+        # instead of being logged as a database failure.
+        user_update_request = UpdateUserRequest(
+            last_name=customer_request.last_name,
+            first_name=customer_request.first_name,
+            email=customer_request.email,
+        )
+
         connection = await self.database_connection.get_connection()
         if not connection:
             return None
@@ -94,12 +116,12 @@ class CustomerService:
                 logger.info(f"Updating user details for customer with UserId {user_id}.")
 
                 # Update user details
-                user_update_request = UpdateUserRequest(
-                    last_name=customer_request.last_name,
-                    first_name=customer_request.first_name,
-                    email=customer_request.email,
-                )
-                await self.user_service.update_user(user_id, user_update_request)
+                user_updated = await self.user_service.update_user(user_id, user_update_request)
+
+                if not user_updated:
+                    logger.error(f"User details for customer with UserId {user_id} could not be updated "
+                                 f"(the email address may already be in use). The address was not changed.")
+                    return None
 
                 # Update customer address
                 logger.info(f"Updating address for customer with UserId {user_id}.")

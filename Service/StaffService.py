@@ -2,7 +2,8 @@ import aiomysql
 from logger import logger
 from aiomysql import DictCursor
 from Dtos.Request.UserRequest import UserRequest
-from Dtos.Request.StaffRequest import StaffRequest
+from Dtos.Request.StaffCreateRequest import StaffCreateRequest
+from Dtos.Request.StaffUpdateRequest import StaffUpdateRequest
 from Dtos.Response.UserResponse import UserResponse
 from Infrastructure.AppConstants import AppConstants
 from SqlQueries.staff_sql_queries import STAFF_QUERIES
@@ -15,7 +16,7 @@ class StaffService:
         self.user_service = user_service
         self.constants = AppConstants
 
-    async def create_staff(self, staff_request: StaffRequest):
+    async def create_staff(self, staff_request: StaffCreateRequest):
         logger.info(f"Processing staff creation for {staff_request.email}...")
 
         user_request = UserRequest(
@@ -83,7 +84,15 @@ class StaffService:
         logger.info(f"About to call user service to toggle staff status with the user id {user_id}")
         return await self.user_service.toggle_user_active_status(user_id)
 
-    async def update_staff(self, user_id: int, staff_request: StaffRequest):
+    async def update_staff(self, user_id: int, staff_request: StaffUpdateRequest):
+        # Built before any database work so an invalid request is raised to the caller
+        # instead of being logged as a database failure.
+        user_update_request = UpdateUserRequest(
+            last_name=staff_request.last_name,
+            first_name=staff_request.first_name,
+            email=staff_request.email,
+        )
+
         connection = await self.database_connection.get_connection()
         if not connection:
             return None
@@ -107,12 +116,13 @@ class StaffService:
                 logger.info("Staff table updated")
 
                 logger.info("Starting to update staff details in the user table")
-                user_update_request = UpdateUserRequest(
-                    last_name=staff_request.last_name,
-                    first_name=staff_request.first_name,
-                    email=staff_request.email,
-                )
-                await self.user_service.update_user(user_id, user_update_request)
+                user_updated = await self.user_service.update_user(user_id, user_update_request)
+
+                if not user_updated:
+                    logger.error(f"User details for staff with User Id {user_id} could not be updated "
+                                 f"(the email address may already be in use). The position change was rolled back.")
+                    await connection.rollback()
+                    return None
 
                 await connection.commit()
 

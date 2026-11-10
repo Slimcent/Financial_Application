@@ -1,8 +1,14 @@
-class CustomerRequest:
-    def __init__(self, last_name: str, first_name: str, email: str, address: str, account_type_id: int = None):
-        self.last_name = last_name
-        self.first_name = first_name
-        self.email = email
-        self.address = address
-        self.account_type_id = account_type_id
-    
+from pydantic import Field
+
+from Dtos.Request.base_request import Address, BaseRequest, EmailAddress, Password, PersonName, PositiveId
+
+
+class CustomerRequest(BaseRequest):
+    """Customer creation request: creates the user, the customer record and the customer's first account."""
+
+    last_name: PersonName
+    first_name: PersonName
+    email: EmailAddress
+    address: Address
+    account_type_id: PositiveId
+    password: Password = Field(repr=False)
