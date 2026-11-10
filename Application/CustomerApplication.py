@@ -14,22 +14,6 @@ class CustomerApplication:
         self.customer_service = CustomerService(self.database_connection, self.user_service)
 
     async def run_application(self):
-        # await self.create_customer(customer_request=CustomerRequest(
-        #     last_name="Jena",
-        #     first_name="Kol",
-        #     address="Lagos",
-        #     email="kol@yopmail.com",
-        #     account_type_id=2
-        # ))
-
-        # await self.update_customer(12, customer_request=CustomerRequest(
-        #     last_name="Jena",
-        #     first_name="Obi",
-        #     email="kol@yopmail.com",
-        #     address="Abia",
-        #     account_type_id=None
-        # ))
-
         # await self.delete_customer(8)
         await self.get_customer_details(12)
         # await self.add_or_update_customer_account_type(12, 1)

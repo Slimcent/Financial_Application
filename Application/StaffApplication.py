@@ -14,19 +14,11 @@ class StaffApplication:
 
     async def run_application(self):
         # await self.test_database_connection()
-        # await self.create_staff("Binta", "Ce", "binta@yopmail.com", "Lead", "obinna")
         # await self.get_all_staff()
         # await self.toggle_staff_active_status(1)
         await self.get_staff_details(3)
         # await self.delete_staff(4)
-        # await self.update_staff_details(2, staff_request=StaffRequest(
-        #     last_name="Doe",
-        #     first_name="John",
-        #     email="john.doe@yopmail.com",
-        #     position="Lead",
-        #     password=None
-        # ))
-
+        
     async def create_staff(self, last_name: str, first_name: str, email: str, position: str, password: str):
         logger.info(f"Attempting to create new staff: {last_name} {first_name}, Email: {email}, Position: {position}")
 
