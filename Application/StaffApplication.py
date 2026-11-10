@@ -1,7 +1,8 @@
 from Dtos.Response.UserResponse import UserResponse
 from Service.UserService import UserService
 from logger import logger
-from Dtos.Request.StaffRequest import StaffRequest
+from Dtos.Request.StaffCreateRequest import StaffCreateRequest
+from Dtos.Request.StaffUpdateRequest import StaffUpdateRequest
 from database_connection import DatabaseConnection
 from Service.StaffService import StaffService
 
@@ -22,7 +23,7 @@ class StaffApplication:
     async def create_staff(self, last_name: str, first_name: str, email: str, position: str, password: str):
         logger.info(f"Attempting to create new staff: {last_name} {first_name}, Email: {email}, Position: {position}")
 
-        staff_request = StaffRequest(
+        staff_request = StaffCreateRequest(
             last_name=last_name,
             first_name=first_name,
             email=email,
@@ -80,7 +81,7 @@ class StaffApplication:
         else:
             logger.error("Database connection failed.")
 
-    async def update_staff_details(self, user_id: int, staff_request: StaffRequest):
+    async def update_staff_details(self, user_id: int, staff_request: StaffUpdateRequest):
         logger.info(f"Starting the update of staff with the user id {user_id}")
         result = await self.service.update_staff(user_id, staff_request)
 

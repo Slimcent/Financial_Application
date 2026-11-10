@@ -1,5 +1,7 @@
-class UpdateUserRequest:
-    def __init__(self, last_name: str, first_name: str,  email: str):
-        self.last_name = last_name
-        self.first_name = first_name
-        self.email = email
+from Dtos.Request.base_request import BaseRequest, EmailAddress, PersonName
+
+
+class UpdateUserRequest(BaseRequest):
+    last_name: PersonName
+    first_name: PersonName
+    email: EmailAddress

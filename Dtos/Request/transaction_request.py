@@ -1,86 +1,51 @@
 from typing import Optional
 
+from pydantic import model_validator
+
+from Dtos.Request.base_request import AccountNumber, Amount, BaseRequest, Description, PositiveId
 from Dtos.Request.pagination_request import PaginationRequest
 
 
-class TransactionRequest:
-    def __init__(
-            self,
-            user_id: int,
-            account_id: int,
-            account_number: str,
-            amount: float,
-            transaction_type_id: int,
-            transaction_mode_id: int,
-            transaction_status_id: int,
-            sender_id: Optional[int] = None,
-            description: Optional[str] = None
-    ):
-        self.user_id = user_id
-        self.sender_id = sender_id
-        self.account_id = account_id
-        self.account_number = account_number
-        self.amount = amount
-        self.transaction_type_id = transaction_type_id
-        self.transaction_mode_id = transaction_mode_id
-        self.transaction_status_id = transaction_status_id
-        self.description = description
+class TransactionRequest(BaseRequest):
+    user_id: PositiveId
+    account_id: PositiveId
+    account_number: AccountNumber
+    amount: Amount
+    transaction_type_id: PositiveId
+    transaction_mode_id: PositiveId
+    transaction_status_id: PositiveId
+    sender_id: Optional[PositiveId] = None
+    description: Description = None
 
 
-class UserTransactionsRequest:
-    def __init__(
-            self,
-            user_id: Optional[int] = None,
-            sender_id: Optional[int] = None,
-            account_type_id: Optional[int] = None,
-            transaction_type_id: Optional[int] = None,
-            transaction_mode_id: Optional[int] = None,
-            account_number: Optional[str] = None,
-            transaction_status_id: Optional[int] = None,
-    ):
-        self.user_id = user_id
-        self.sender_id = sender_id
-        self.account_type_id = account_type_id
-        self.transaction_type_id = transaction_type_id
-        self.transaction_mode_id = transaction_mode_id
-        self.account_number = account_number
-        self.transaction_status_id = transaction_status_id
+class UserTransactionsRequest(BaseRequest):
+    user_id: PositiveId
+    sender_id: Optional[PositiveId] = None
+    account_type_id: Optional[PositiveId] = None
+    transaction_type_id: Optional[PositiveId] = None
+    transaction_mode_id: Optional[PositiveId] = None
+    account_number: Optional[AccountNumber] = None
+    transaction_status_id: Optional[PositiveId] = None
 
 
 class TransactionsRequest(PaginationRequest):
-    def __init__(
-        self,
-        user_id: Optional[int] = None,
-        sender_id: Optional[int] = None,
-        account_type_id: Optional[int] = None,
-        transaction_type_id: Optional[int] = None,
-        transaction_mode_id: Optional[int] = None,
-        account_number: Optional[str] = None,
-        transaction_status_id: Optional[int] = None,
-        page: int = 1,
-        page_size: int = 10,
-        search_term: Optional[str] = None,
-    ):
-        super().__init__(page, page_size, search_term)
-
-        self.user_id = user_id
-        self.sender_id = sender_id
-        self.account_type_id = account_type_id
-        self.transaction_type_id = transaction_type_id
-        self.transaction_mode_id = transaction_mode_id
-        self.account_number = account_number
-        self.transaction_status_id = transaction_status_id
+    user_id: Optional[PositiveId] = None
+    sender_id: Optional[PositiveId] = None
+    account_type_id: Optional[PositiveId] = None
+    transaction_type_id: Optional[PositiveId] = None
+    transaction_mode_id: Optional[PositiveId] = None
+    account_number: Optional[AccountNumber] = None
+    transaction_status_id: Optional[PositiveId] = None
 
 
-class FundsTransferRequest:
-    def __init__(
-            self,
-            amount: int = None,
-            sender_account_number: Optional[str] = None,
-            receiver_account_number: Optional[str] = None,
-            description: Optional[str] = None,
-    ):
-        self.amount = amount
-        self.sender_account_number = sender_account_number
-        self.receiver_account_number = receiver_account_number
-        self.description = description
+class FundsTransferRequest(BaseRequest):
+    amount: Amount
+    sender_account_number: AccountNumber
+    receiver_account_number: AccountNumber
+    description: Description = None
+
+    @model_validator(mode="after")
+    def _check_distinct_accounts(self) -> "FundsTransferRequest":
+        if self.sender_account_number == self.receiver_account_number:
+            raise ValueError("sender and receiver account numbers must be different")
+        return self

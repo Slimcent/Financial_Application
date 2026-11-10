@@ -1,10 +1,9 @@
-from pydantic import BaseModel
-from decimal import Decimal
+from Dtos.Request.base_request import AccountNumber, Amount, BaseRequest, PositiveId
 
 
-class FundAccountRequest(BaseModel):
-    customer_id: int
-    account_number: str
-    amount: Decimal
-    transaction_type_id: int
-    transaction_mode_id: int
+class FundAccountRequest(BaseRequest):
+    customer_id: PositiveId
+    account_number: AccountNumber
+    amount: Amount
+    transaction_type_id: PositiveId
+    transaction_mode_id: PositiveId
