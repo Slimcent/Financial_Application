@@ -1,13 +1,11 @@
-from typing import Optional
+from typing import Annotated
+
+from pydantic import Field, Strict
+
+from Dtos.Request.base_request import BaseRequest, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, SearchTerm
 
 
-class PaginationRequest:
-    def __init__(
-        self,
-        page: int = 1,
-        page_size: int = 10,
-        search_term: Optional[str] = None,
-    ):
-        self.page = page
-        self.page_size = page_size
-        self.search_term = search_term
+class PaginationRequest(BaseRequest):
+    page: Annotated[int, Strict(), Field(ge=1)] = DEFAULT_PAGE
+    page_size: Annotated[int, Strict(), Field(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE
+    search_term: SearchTerm = None

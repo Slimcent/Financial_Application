@@ -1,7 +1,11 @@
-class UserRequest:
-    def __init__(self, last_name: str, first_name: str,  email: str, role_id: int, password: str):
-        self.last_name = last_name
-        self.first_name = first_name
-        self.email = email
-        self.role_id = role_id
-        self.password = password
+from pydantic import Field
+
+from Dtos.Request.base_request import BaseRequest, EmailAddress, Password, PersonName, PositiveId
+
+
+class UserRequest(BaseRequest):
+    last_name: PersonName
+    first_name: PersonName
+    email: EmailAddress
+    role_id: PositiveId
+    password: Password = Field(repr=False)
