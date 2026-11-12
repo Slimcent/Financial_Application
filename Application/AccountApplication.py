@@ -1,9 +1,10 @@
-from Dtos.Response.AccountResponse import AccountResponse
-from database_connection import DatabaseConnection
-from Repository.account_repository import AccountRepository
-from logger import logger
+import uuid
+from Models.Dtos.Response.AccountResponse import AccountResponse
+from Data.database_connection import DatabaseConnection
+from Data.Implementations.account_repository import AccountRepository
+from Infrastructure.Logging.logger import logger
 from typing import Any, Optional, List
-from Service.AccountService import AccountService
+from Services.Implementations.AccountService import AccountService
 
 
 def _convert_account_response_to_dict(account_response: AccountResponse) -> dict:
@@ -51,7 +52,7 @@ class AccountApplication:
 
         return account_responses
 
-    async def get_customer_account_details(self, user_id: int, account_type_id: int) -> dict:
+    async def get_customer_account_details(self, user_id: uuid.UUID, account_type_id: int) -> dict:
         logger.info(f"Getting account details for UserId: {user_id} and AccountTypeId: {account_type_id}")
 
         account_response = await self.account_service.get_customer_account_details(user_id, account_type_id)

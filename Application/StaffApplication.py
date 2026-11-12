@@ -1,10 +1,14 @@
-from Dtos.Response.UserResponse import UserResponse
-from Service.UserService import UserService
-from logger import logger
-from Dtos.Request.StaffCreateRequest import StaffCreateRequest
-from Dtos.Request.StaffUpdateRequest import StaffUpdateRequest
-from database_connection import DatabaseConnection
-from Service.StaffService import StaffService
+import uuid
+from Models.Dtos.Response.UserResponse import UserResponse
+from Services.Implementations.UserService import UserService
+from Infrastructure.Logging.logger import logger
+from Models.Dtos.Request.StaffCreateRequest import StaffCreateRequest
+from Models.Dtos.Request.StaffUpdateRequest import StaffUpdateRequest
+from Data.database_connection import DatabaseConnection
+from Services.Implementations.StaffService import StaffService
+
+# Placeholder for the demo calls below: replace with a real Users.Id (GUID) from your database.
+SAMPLE_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 class StaffApplication:
@@ -16,9 +20,9 @@ class StaffApplication:
     async def run_application(self):
         # await self.test_database_connection()
         # await self.get_all_staff()
-        # await self.toggle_staff_active_status(1)
-        await self.get_staff_details(3)
-        # await self.delete_staff(4)
+        # await self.toggle_staff_active_status(SAMPLE_USER_ID)
+        await self.get_staff_details(SAMPLE_USER_ID)
+        # await self.delete_staff(SAMPLE_USER_ID)
         
     async def create_staff(self, last_name: str, first_name: str, email: str, position: str, password: str):
         logger.info(f"Attempting to create new staff: {last_name} {first_name}, Email: {email}, Position: {position}")
@@ -60,7 +64,7 @@ class StaffApplication:
             )
         print()
 
-    async def toggle_staff_active_status(self, user_id: int):
+    async def toggle_staff_active_status(self, user_id: uuid.UUID):
         logger.info(f"Toggling active status for staff with User ID: {user_id}")
 
         success = await self.service.toggle_staff_active_status(user_id)
@@ -81,7 +85,7 @@ class StaffApplication:
         else:
             logger.error("Database connection failed.")
 
-    async def update_staff_details(self, user_id: int, staff_request: StaffUpdateRequest):
+    async def update_staff_details(self, user_id: uuid.UUID, staff_request: StaffUpdateRequest):
         logger.info(f"Starting the update of staff with the user id {user_id}")
         result = await self.service.update_staff(user_id, staff_request)
 
@@ -92,7 +96,7 @@ class StaffApplication:
 
         return result
 
-    async def get_staff_details(self, user_id: int) -> UserResponse | None:
+    async def get_staff_details(self, user_id: uuid.UUID) -> UserResponse | None:
         logger.info(f"getting staff details with the user id {user_id}")
         staff = await self.service.get_staff_by_id(user_id)
 
@@ -114,7 +118,7 @@ class StaffApplication:
 
         return staff
 
-    async def delete_staff(self, user_id: int):
+    async def delete_staff(self, user_id: uuid.UUID):
         logger.info(f"Starting to delete staff with user id {user_id}")
         result = await self.service.delete_staff(user_id)
         if result:

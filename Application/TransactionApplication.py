@@ -1,13 +1,14 @@
+import uuid
 from typing import Optional, Dict, Any, List
 
-from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest, FundsTransferRequest
-from Dtos.Response.AccountResponse import AccountResponse
-from Dtos.Response.AccountsResponse import AccountsResponse
-from Dtos.Response.paged_response import PagedResponse
-from Dtos.Response.transaction_response import TransactionsResponse
-from Repository.transaction_repository import TransactionRepository
-from Service.transaction_service import TransactionService
-from logger import logger
+from Models.Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest, FundsTransferRequest
+from Models.Dtos.Response.AccountResponse import AccountResponse
+from Models.Dtos.Response.AccountsResponse import AccountsResponse
+from Models.Dtos.Response.paged_response import PagedResponse
+from Models.Dtos.Response.transaction_response import TransactionsResponse
+from Data.Implementations.transaction_repository import TransactionRepository
+from Services.Implementations.transaction_service import TransactionService
+from Infrastructure.Logging.logger import logger
 
 
 class TransactionApplication:
@@ -15,7 +16,7 @@ class TransactionApplication:
         self.transaction_repo = transaction_repo
         self.transaction_service = transaction_service
 
-    async def get_customer_account(self, user_id: int, account_type_id: int) -> dict:
+    async def get_customer_account(self, user_id: uuid.UUID, account_type_id: int) -> dict:
         try:
             print("Transaction application")
             response = await self.transaction_service.get_customer_account(user_id, account_type_id)
@@ -31,7 +32,7 @@ class TransactionApplication:
             print(f"Error processing customer account: {e}")
             return None
 
-    async def get_customer_accounts_with_user_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+    async def get_customer_accounts_with_user_id(self, user_id: uuid.UUID) -> Optional[Dict[str, Any]]:
         customer = await self.transaction_service.get_customer_accounts_with_user_id(user_id)
 
         if not customer:
@@ -55,7 +56,7 @@ class TransactionApplication:
             -> AccountsResponse:
         return await self.transaction_service.fund_account(account_number, amount, description)
 
-    async def get_user_transactions(self, user_id: int) -> Optional[AccountResponse]:
+    async def get_user_transactions(self, user_id: uuid.UUID) -> Optional[AccountResponse]:
         return await self.transaction_service.get_user_transactions(user_id)
 
     async def filter_user_transactions(self, request: UserTransactionsRequest) -> Optional[AccountResponse]:
