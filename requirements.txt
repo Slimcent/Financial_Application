@@ -1,0 +1,15 @@
+# Database access
+SQLAlchemy[asyncio]>=2.0.30,<3   # ORM + AsyncSession (the asyncio extra installs greenlet)
+aiomysql>=0.2.0                  # async MySQL driver (raw pool + SQLAlchemy async engine)
+PyMySQL>=1.1.0                   # sync MySQL driver (sync engine used by Alembic)
+cryptography>=42.0               # needed by PyMySQL/aiomysql for MySQL 8 caching_sha2_password logins
+alembic>=1.13                    # migrations (Data/Migrations)
+
+# Configuration, validation, security, logging
+python-dotenv>=1.0
+pydantic>=2.7,<3                 # request DTOs (Models/Dtos/Request)
+bcrypt>=4.0                      # password hashing (Infrastructure/Security.py)
+colorlog>=6.8                    # coloured console logging (Infrastructure/Logging)
+
+# Testing
+pytest>=8.0

@@ -1,8 +1,12 @@
+import uuid
 from Application.TransactionApplication import TransactionApplication
-from Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest, FundsTransferRequest
-from Repository.transaction_repository import TransactionRepository
-from Service.transaction_service import TransactionService
-from database_orm_async import Database
+from Models.Dtos.Request.transaction_request import UserTransactionsRequest, TransactionsRequest, FundsTransferRequest
+from Data.Implementations.transaction_repository import TransactionRepository
+from Services.Implementations.transaction_service import TransactionService
+from Data.database_orm_async import Database
+
+# Placeholder for the demo calls below: replace with a real Users.Id (GUID) from your database.
+SAMPLE_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 class ProcessTransaction:
@@ -16,13 +20,13 @@ class ProcessTransaction:
         try:
             print("Beginning transaction process")
 
-            # customer_account = await self.transaction_application.get_customer_account(6, 1)
+            # customer_account = await self.transaction_application.get_customer_account(SAMPLE_USER_ID, 1)
             # if customer_account:
             #     print(customer_account)
             # else:
             #     print("No customer accounts found.")
 
-            # customer_accounts = await self.transaction_application.get_customer_accounts_with_user_id(6)
+            # customer_accounts = await self.transaction_application.get_customer_accounts_with_user_id(SAMPLE_USER_ID)
             # if customer_accounts:
             #     print(customer_accounts)
             # else:
@@ -46,14 +50,14 @@ class ProcessTransaction:
             # else:
             #     print("Account funding failed")
 
-            # user_transactions = await self.transaction_application.get_user_transactions(12)
+            # user_transactions = await self.transaction_application.get_user_transactions(SAMPLE_USER_ID)
             # if user_transactions is not None:
             #     print(f"{user_transactions}")
             # else:
             #     print("No transactions found")
 
             # request = UserTransactionsRequest(
-            #     user_id=12,
+            #     user_id=SAMPLE_USER_ID,
             #     account_type_id=1,
             #     transaction_type_id=None,
             #     transaction_mode_id=None,
