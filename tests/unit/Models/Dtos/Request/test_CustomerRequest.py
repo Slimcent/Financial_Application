@@ -11,10 +11,10 @@ def test_valid_creation_request_is_accepted(customer_payload):
 
 
 def test_text_fields_are_normalised(customer_payload):
-    request = CustomerRequest(**{**customer_payload, "first_name": " Jane ", "email": " Jane.Doe@Example.COM ",
+    request = CustomerRequest(**{**customer_payload, "first_name": " Jane ", "email": " Example@Example.COM ",
                                  "address": "  1 Main Street  "})
 
-    assert (request.first_name, request.email, request.address) == ("Jane", "jane.doe@example.com", "1 Main Street")
+    assert (request.first_name, request.email, request.address) == ("Jane", "example@example.com", "1 Main Street")
 
 
 @pytest.mark.parametrize("field", REQUIRED_FIELDS)

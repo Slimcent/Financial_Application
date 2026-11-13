@@ -65,35 +65,35 @@ def omit():
 
 @pytest.fixture
 def user_payload():
-    return {"last_name": "Doe", "first_name": "Jane", "email": "jane.doe@example.com", "role_id": 1,
+    return {"last_name": "Doe", "first_name": "Jane", "email": "example@example.com", "role_id": 1,
             "password": VALID_PASSWORD}
 
 
 @pytest.fixture
 def update_user_payload():
-    return {"last_name": "Doe", "first_name": "Jane", "email": "jane.doe@example.com"}
+    return {"last_name": "Doe", "first_name": "Jane", "email": "example@example.com"}
 
 
 @pytest.fixture
 def customer_payload():
-    return {"last_name": "Doe", "first_name": "Jane", "email": "jane.doe@example.com", "address": "1 Main Street",
+    return {"last_name": "Doe", "first_name": "Jane", "email": "example@example.com", "address": "1 Main Street",
             "account_type_id": 1, "password": VALID_PASSWORD}
 
 
 @pytest.fixture
 def customer_update_payload():
-    return {"last_name": "Doe", "first_name": "Jane", "email": "jane.doe@example.com", "address": "1 Main Street"}
+    return {"last_name": "Doe", "first_name": "Jane", "email": "example@example.com", "address": "1 Main Street"}
 
 
 @pytest.fixture
 def staff_create_payload():
-    return {"last_name": "Smith", "first_name": "John", "email": "john.smith@example.com", "position": "Teller",
+    return {"last_name": "Smith", "first_name": "John", "email": "example@example.com", "position": "Teller",
             "password": VALID_PASSWORD}
 
 
 @pytest.fixture
 def staff_update_payload():
-    return {"last_name": "Smith", "first_name": "John", "email": "john.smith@example.com", "position": "Teller"}
+    return {"last_name": "Smith", "first_name": "John", "email": "example@example.com", "position": "Teller"}
 
 
 @pytest.fixture
@@ -178,11 +178,11 @@ def invalid_person_name(request):
 
 
 @pytest.fixture(params=[
-    ("jane@example.com", "jane@example.com"),
-    ("  Jane.Doe+Bank@Example.COM ", "jane.doe+bank@example.com"),
-    ("\tJANE@EXAMPLE.COM\n", "jane@example.com"),
-    ("o'neil@sub.example.org", "o'neil@sub.example.org"),
-    ("a@example.com", "a@example.com"),
+    ("example@example.com", "example@example.com"),
+    ("  Example+Tag@Example.COM ", "example+tag@example.com"),
+    ("\tEXAMPLE@EXAMPLE.COM\n", "example@example.com"),
+    ("o'example@sub.example.org", "o'example@sub.example.org"),
+    ("example@example.com", "example@example.com"),
     (LONGEST_VALID_EMAIL, LONGEST_VALID_EMAIL),
 ], ids=["plain", "trim-and-lowercase", "tab-newline-uppercase", "apostrophe-subdomain", "shortest", "254-chars"])
 def valid_email(request):
@@ -196,10 +196,10 @@ def valid_email(request):
     pytest.param("jane@example", id="no-tld"),
     pytest.param("jane@@example.com", id="double-at"),
     pytest.param("jane@example..com", id="double-dot-domain"),
-    pytest.param(".jane@example.com", id="leading-dot"),
+    pytest.param(".example@example.com", id="leading-dot"),
     pytest.param("jane.@example.com", id="trailing-dot-local"),
-    pytest.param("ja..ne@example.com", id="double-dot-local"),
-    pytest.param("ja ne@example.com", id="inner-space"),
+    pytest.param("ja..example@example.com", id="double-dot-local"),
+    pytest.param("ja example@example.com", id="inner-space"),
     pytest.param("jane@-example.com", id="label-leading-hyphen"),
     pytest.param("jane@example-.com", id="label-trailing-hyphen"),
     pytest.param("jane@example.c", id="one-letter-tld"),

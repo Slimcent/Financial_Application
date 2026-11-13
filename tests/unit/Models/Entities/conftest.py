@@ -181,7 +181,7 @@ def loaded_graph(session_without_database):
     transaction_type, transaction_mode, transaction_status = (
         TransactionType(Id=1, Name="Deposit"), TransactionMode(Id=1, Name="Credit"),
         TransactionStatus(Id=2, Name="Completed"))
-    user = User(Id=uuid7(), LastName="Doe", FirstName="Jane", Email="jane.doe@example.com", RoleId=role.Id,
+    user = User(Id=uuid7(), LastName="Doe", FirstName="Jane", Email="example@example.com", RoleId=role.Id,
                 Password="hash", Active=True)
     staff = Staff(Id=uuid7(), UserId=user.Id, Position="Teller")
     customer = Customer(Id=uuid7(), UserId=user.Id, Address="1 Main Street")

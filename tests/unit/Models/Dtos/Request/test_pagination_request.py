@@ -34,7 +34,7 @@ def test_page_size_above_fifty_is_rejected(assert_rejected):
 @pytest.mark.parametrize("raw, expected", [
     (None, None),
     ("Doe", "Doe"),
-    ("  jane@example.com ", "jane@example.com"),
+    ("  example@example.com ", "example@example.com"),
     ("x" * 255, "x" * 255),
 ], ids=["none", "text", "trimmed", "max-length"])
 def test_valid_search_term_is_accepted(raw, expected):
