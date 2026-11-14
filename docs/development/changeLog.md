@@ -1,5 +1,23 @@
 # Change Log
 
+## 2026-11-13
+
+Details: [002 — Generic Repository and Unit of Work](002-generic-repository.md).
+
+### Data Access
+
+- Added the generic repository (`IRepository`, `Repository`) and the unit of work (`IUnitofWork`, `UnitofWork`).
+- Staged operations are persisted together by the unit of work; `_async` operations persist at once.
+- Bulk updates and deletes go through the ORM and run in batches.
+- The unit of work closes its session when its block ends.
+
+### Testing
+
+- Added `pytest-asyncio` and set `asyncio_default_fixture_loop_scope` in `pytest.ini`.
+- Added 309 repository and unit of work tests, run on SQLite in memory.
+- Fixed an issue found by the tests where new related objects could be left unsaved.
+- Verified all 1,626 unit tests locally.
+
 ## 2026-11-12
 
 ### Project Structure
