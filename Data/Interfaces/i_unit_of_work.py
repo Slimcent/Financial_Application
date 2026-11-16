@@ -3,7 +3,7 @@ collects staged (non-persisting) changes and persists them all at once.
 
 Usage::
 
-    async with UnitofWork() as unit_of_work:
+    async with UnitOfWork() as unit_of_work:
         account = await unit_of_work.accounts.get_single_async(Account.AccountNumber == account_number)
         unit_of_work.accounts.update_single(account, {"Balance": account.Balance + amount})
         unit_of_work.transactions.add_single(Transaction(...))
@@ -25,15 +25,16 @@ Usage::
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, TypeVar
+from typing import Any, TypeAlias, TypeVar
 
 from Data.Interfaces.i_repository import IRepository, TEntity
 from Models.Entities import (Account, AccountType, Customer, Role, Staff, Transaction, TransactionMode,
                              TransactionStatus, TransactionType, User)
 
-TUnitOfWork = TypeVar("TUnitOfWork", bound="IUnitofWork")
+TUnitOfWork = TypeVar("TUnitOfWork", bound="IUnitOfWork")
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ class SaveChangesResult:
         return self.added + self.updated + self.deleted
 
 
-class IUnitofWork(ABC):
+class IUnitOfWork(ABC):
     """One session, the repositories that work on it, and the changes staged through them."""
 
     # ------------------------------------------------------------------------------------------------------
@@ -139,3 +140,8 @@ class IUnitofWork(ABC):
     async def rollback_async(self) -> None:
         """Discard every staged change and end the current transaction (releasing any row locks); the entities
         keep the values they were loaded with."""
+
+
+# Creates a new, not yet active unit of work. The caller enters it (``async with factory() as unit_of_work``), passes
+# it to the services it calls and so decides where a business operation starts and ends.
+UnitOfWorkFactory: TypeAlias = Callable[[], IUnitOfWork]

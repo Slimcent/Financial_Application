@@ -2,11 +2,11 @@
 
 These tests only exercise the pydantic request models in Models/Dtos/Request.
 They must not import services, repositories, database connections or other infrastructure.
+The generic helpers (assert_rejected, omit) are shared with the response tests: tests/unit/Models/Dtos/conftest.py.
 """
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
 
 VALID_ACCOUNT_NUMBER = "2606387058"
 OTHER_ACCOUNT_NUMBER = "2684681945"
@@ -19,44 +19,6 @@ VALID_CUSTOMER_ID = "5a1c9e7b-2d4f-4b8a-9c6e-0d3f1a2b4c6e"
 
 # An email address of exactly 254 characters (the maximum allowed): 64-char local part, 189-char domain.
 LONGEST_VALID_EMAIL = f"{'a' * 64}@{'b' * 63}.{'c' * 63}.{'d' * 57}.com"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-@pytest.fixture
-def assert_rejected():
-    """Assert that building `model` from `payload` raises a ValidationError for `field`.
-
-    `field=None` expects a model-level error (e.g. a model_validator). When `error_type` is given,
-    the error reported for that location must have that pydantic error type.
-    """
-
-    def _assert_rejected(model, payload, field=None, error_type=None):
-        with pytest.raises(ValidationError) as exc_info:
-            model(**payload)
-
-        expected_loc = (field,) if field else ()
-        errors_at_loc = [error for error in exc_info.value.errors() if error["loc"] == expected_loc]
-        assert errors_at_loc, f"expected an error at {expected_loc}, got {exc_info.value.errors()}"
-
-        if error_type is not None:
-            assert error_type in [error["type"] for error in errors_at_loc], exc_info.value.errors()
-
-        return exc_info.value
-
-    return _assert_rejected
-
-
-@pytest.fixture
-def omit():
-    """Return a copy of `payload` without `field`."""
-
-    def _omit(payload, field):
-        return {key: value for key, value in payload.items() if key != field}
-
-    return _omit
 
 
 # ---------------------------------------------------------------------------
@@ -191,19 +153,19 @@ def valid_email(request):
 
 @pytest.fixture(params=[
     pytest.param("plain-address", id="no-at"),
-    pytest.param("jane@", id="no-domain"),
+    pytest.param("example@", id="no-domain"),
     pytest.param("@example.com", id="no-local-part"),
-    pytest.param("jane@example", id="no-tld"),
-    pytest.param("jane@@example.com", id="double-at"),
-    pytest.param("jane@example..com", id="double-dot-domain"),
+    pytest.param("example@example", id="no-tld"),
+    pytest.param("example@@example.com", id="double-at"),
+    pytest.param("example@example..com", id="double-dot-domain"),
     pytest.param(".example@example.com", id="leading-dot"),
-    pytest.param("jane.@example.com", id="trailing-dot-local"),
-    pytest.param("ja..example@example.com", id="double-dot-local"),
-    pytest.param("ja example@example.com", id="inner-space"),
-    pytest.param("jane@-example.com", id="label-leading-hyphen"),
-    pytest.param("jane@example-.com", id="label-trailing-hyphen"),
-    pytest.param("jane@example.c", id="one-letter-tld"),
-    pytest.param("jane@example.c0m", id="digit-in-tld"),
+    pytest.param("example.@example.com", id="trailing-dot-local"),
+    pytest.param("ex..ample@example.com", id="double-dot-local"),
+    pytest.param("ex ample@example.com", id="inner-space"),
+    pytest.param("example@-example.com", id="label-leading-hyphen"),
+    pytest.param("example@example-.com", id="label-trailing-hyphen"),
+    pytest.param("example@example.c", id="one-letter-tld"),
+    pytest.param("example@example.c0m", id="digit-in-tld"),
     pytest.param(f"{'a' * 65}@example.com", id="local-part-too-long"),
     pytest.param(LONGEST_VALID_EMAIL.replace("d" * 57, "d" * 58), id="255-chars"),
     pytest.param(12345, id="int"),

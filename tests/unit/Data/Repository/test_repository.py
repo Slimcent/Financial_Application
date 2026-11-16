@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError, InvalidRequestError, MultipleResultsF
 from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.orm import joinedload, selectinload
 
-from Data.Implementations.unit_of_work import UnitofWork
+from Data.Implementations.unit_of_work import UnitOfWork
 from Models.Dtos.Response.paged_response import PagedResponse
 from Models.Entities import Account, AccountType, Role, User
 
@@ -165,7 +165,7 @@ class TestGetSingle:
         assert account.AccountNumber == "2600000002"
 
     async def test_statement_with_a_filter(self, unit_of_work):
-        statement = unit_of_work.accounts.query().join(Account.user).where(User.Email == "dee@example.com")
+        statement = unit_of_work.accounts.query().join(Account.user).where(User.Email == "example4@example.com")
 
         assert (await unit_of_work.accounts.get_single_async(statement)).AccountNumber == "2600000005"
 
@@ -349,6 +349,28 @@ class TestAggregates:
 
     async def test_sum_of_an_expression(self, unit_of_work):
         assert await unit_of_work.accounts.sum_async(Account.Balance * 2) == Decimal("850.00")
+
+    async def test_sum_of_a_statement(self, unit_of_work):
+        statement = unit_of_work.accounts.query().join(Account.user).where(User.FirstName == "Ada")
+
+        total = await unit_of_work.accounts.sum_async(Account.Balance, statement)
+
+        assert isinstance(total, Decimal)
+        assert total == Decimal("150.00")
+
+    async def test_sum_of_a_statement_ignores_its_ordering_and_limit(self, unit_of_work):
+        statement = unit_of_work.accounts.query().order_by(Account.Balance).limit(1)
+
+        assert await unit_of_work.accounts.sum_async(Account.Balance, statement) == Decimal("425.00")
+
+    async def test_sum_of_a_statement_with_no_matching_row_is_zero(self, unit_of_work):
+        statement = unit_of_work.accounts.query().join(Account.user).where(User.FirstName == "Zed")
+
+        assert await unit_of_work.accounts.sum_async(Account.Balance, statement) == 0
+
+    async def test_sum_of_a_statement_of_another_entity_is_rejected(self, unit_of_work):
+        with pytest.raises(TypeError):
+            await unit_of_work.accounts.sum_async(Account.Balance, unit_of_work.users.query())
 
     @pytest.mark.parametrize("criteria, expected", [
         pytest.param((Account.AccountNumber == "2600000001",), True, id="match"),
@@ -860,7 +882,7 @@ class TestBatches:
     @pytest_asyncio.fixture
     async def batched_unit_of_work(self, session_factory, bank):
         """A unit of work whose bulk operations load, write and delete two rows per batch."""
-        async with UnitofWork(session_factory, batch_size=2) as unit_of_work:
+        async with UnitOfWork(session_factory, batch_size=2) as unit_of_work:
             yield unit_of_work
 
     async def test_every_matching_row_is_updated_once(self, batched_unit_of_work, persisted):

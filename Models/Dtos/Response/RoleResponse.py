@@ -1,4 +1,6 @@
-class RoleResponse:
-    def __init__(self, role_id: int, name: str):
-        self.role_id = role_id
-        self.name = name
+from Models.Dtos.Response.base_response import BaseResponse, IntegerId
+
+
+class RoleResponse(BaseResponse):
+    role_id: IntegerId
+    name: str

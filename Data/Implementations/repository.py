@@ -461,12 +461,20 @@ class Repository(IRepository[TEntity]):
     async def count_async(self, *criteria: Any) -> int:
         return await self._count_async(self._statement_from(criteria))
 
+    @overload
     async def sum_async(self, column: QueryableAttribute[Any] | ColumnElement[Any],
-                        *criteria: Criterion) -> Number:
-        _validate_criteria(criteria)
-        statement = (select(func.coalesce(func.sum(column), 0))
-                     .select_from(self._model)
-                     .where(*criteria))
+                        *criteria: Criterion) -> Number: ...
+
+    @overload
+    async def sum_async(self, column: QueryableAttribute[Any] | ColumnElement[Any],
+                        statement: Select[Any], /) -> Number: ...
+
+    async def sum_async(self, column: QueryableAttribute[Any] | ColumnElement[Any], *criteria: Any) -> Number:
+        # The entity SELECT (criteria or a statement from query()) with its columns replaced by the sum; its FROM
+        # clause and joins are kept. Ordering, offset and limit are dropped, as for count_async().
+        statement = (self._statement_from(criteria)
+                     .with_only_columns(func.coalesce(func.sum(column), 0), maintain_column_froms=True)
+                     .order_by(None).limit(None).offset(None))
         return cast(Number, await self._session.scalar(statement))
 
     @overload

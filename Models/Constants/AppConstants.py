@@ -9,7 +9,7 @@ class AppConstants:
     DatabasePortNumber = 3306
     DepositTransactionTypeId = 1
     TransferTransactionTypeId = 2
-    WithdrawalTransactionTypeId = 1
+    WithdrawalTransactionTypeId = 3
     CreditTransactionModeId = 1
     DebitTransactionModeId = 2
     PendingTransactionStatusId = 1
