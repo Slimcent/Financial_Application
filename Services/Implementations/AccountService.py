@@ -1,78 +1,57 @@
 import uuid
+
+from Data.Interfaces.i_unit_of_work import IUnitOfWork
 from Infrastructure.Logging.logger import logger
-from typing import Optional, List
+from Models.Dtos.Request.base_request import AccountNumber
 from Models.Dtos.Response.AccountResponse import AccountResponse
-from Data.Implementations.account_repository import AccountRepository
-from Data.Extensions.guid import from_db_guid
+from Models.Dtos.Response.AccountsResponse import AccountsResponse
+from Models.Entities import Account, User
+from Services.Exceptions.domain_exceptions import NotFoundError
+from Services.Extensions.exception_handler import validated
+from Services.Extensions.response_mappers import to_account_response, to_accounts_response
+from Services.Interfaces.i_account_service import IAccountService
+
+# What the account responses read: the owner's customer record and every account with its account type.
+USER_ACCOUNTS_INCLUDES = ("customer", "accounts.account_type")
 
 
-class AccountService:
-    def __init__(self, account_repository: AccountRepository):
-        self.account_repository = account_repository
+class AccountService(IAccountService):
 
-    async def get_all_customer_accounts(self) -> Optional[List[AccountResponse]]:
-        data = await self.account_repository.get_all_customer_accounts()
+    async def get_all_customer_accounts(self, unit_of_work: IUnitOfWork) -> list[AccountResponse]:
+        statement = (unit_of_work.users.query()
+                     .where(User.customer.has())
+                     .order_by(User.LastName, User.FirstName))
+        users = await unit_of_work.users.get_range_async(statement, includes=USER_ACCOUNTS_INCLUDES)
 
-        if data is None:
-            logger.error("Failed to fetch customer accounts from repository.")
-            return None
+        logger.info(f"Got {len(users)} customers with their accounts.")
+        return [to_account_response(user, user.accounts, customer=user.customer) for user in users]
 
-        if not data:
-            logger.info("No customer accounts found.")
-            return []
+    async def get_customer_account_details(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID,
+                                           account_type_id: int) -> AccountResponse:
+        account = await unit_of_work.accounts.get_single_async(
+            Account.UserId == user_id, Account.AccountTypeId == account_type_id,
+            includes=["user.customer", "account_type"])
+        if account is None:
+            raise NotFoundError(f"User {user_id} has no account of account type {account_type_id}.")
 
-        customer_dict = {}
+        user = account.user
+        return to_account_response(user, [account], customer=user.customer, balance=account.Balance)
 
-        for row in data:
-            user_id = from_db_guid(row["UserId"])
+    async def get_customer_accounts_with_user_id(self, unit_of_work: IUnitOfWork,
+                                                 user_id: uuid.UUID) -> AccountResponse:
+        user = await unit_of_work.users.get_by_id_async(user_id, includes=USER_ACCOUNTS_INCLUDES)
+        if user is None:
+            raise NotFoundError(f"User with Id {user_id} does not exist.")
 
-            if user_id not in customer_dict:
-                customer_dict[user_id] = AccountResponse(
-                    user_id=user_id,
-                    first_name=row["FirstName"],
-                    last_name=row["LastName"],
-                    email=row["Email"],
-                    account_types=[]
-                )
+        return to_account_response(user, user.accounts, customer=user.customer)
 
-            customer_dict[user_id].account_types.append({
-                "account_type_id": row["AccountTypeId"],
-                "account_type_name": row["AccountType"],
-                "account_number": row["AccountNumber"],
-                "balance": str(row["Balance"] or 0)
-            })
+    async def get_account_details_by_account_number(self, unit_of_work: IUnitOfWork,
+                                                    account_number: str) -> AccountsResponse:
+        account_number = validated(AccountNumber, account_number, "account number")
 
-        logger.info(f"Got {len(customer_dict)} customers with accounts.")
-        return list(customer_dict.values())
+        account = await unit_of_work.accounts.get_single_async(Account.AccountNumber == account_number,
+                                                               includes=["account_type"])
+        if account is None:
+            raise NotFoundError("The account does not exist.")
 
-    async def get_customer_account_details(self, user_id: uuid.UUID, account_type_id: int) -> AccountResponse | None:
-        account_data = await self.account_repository.get_customer_account_details(user_id, account_type_id)
-
-        if account_data is None:
-            logger.error("Account not found.")
-            return None
-
-        logger.info("Account details retrieved in the service method")
-        account_types = [
-            {
-                "account_type_id": account_data["AccountTypeId"],
-                "account_type_name": account_data["AccountType"],
-                "account_number": account_data["AccountNumber"],
-                "balance": account_data["Balance"] or 0.0
-            }
-        ]
-
-        account_response = AccountResponse(
-            user_id=from_db_guid(account_data["UserId"]),
-            last_name=account_data["LastName"],
-            first_name=account_data["FirstName"],
-            email=account_data["Email"],
-            account_type_id=account_data["AccountTypeId"],
-            account_type=account_data["AccountType"],
-            account_number=account_data["AccountNumber"],
-            balance=account_data["Balance"] or 0.0,
-            account_types=account_types
-        )
-
-        return account_response
-
+        return to_accounts_response(account)

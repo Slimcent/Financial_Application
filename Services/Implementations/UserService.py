@@ -1,153 +1,99 @@
 import uuid
+
+from sqlalchemy import or_
+
+from Data.Interfaces.i_unit_of_work import IUnitOfWork
 from Infrastructure.Logging.logger import logger
-from aiomysql import DictCursor
-from Data.Extensions.guid import new_guid, to_db_guid
-from Infrastructure.Security import hash_password
-from Models.Dtos.Request.UserRequest import UserRequest
-from Data.SqlQueries.user_sql_queries import USER_QUERIES
+from Infrastructure.Security import hash_password_async
 from Models.Dtos.Request.UpdateUserRequest import UpdateUserRequest
+from Models.Dtos.Request.UserRequest import UserRequest
+from Models.Dtos.Response.UserResponse import UserResponse
+from Models.Entities import Account, Role, Transaction, User
+from Services.Exceptions.domain_exceptions import ConflictError, DeleteRestrictedError, NotFoundError
+from Services.Extensions.exception_handler import EMAIL_IN_USE_MESSAGE as EMAIL_IN_USE, save_changes_async
+from Services.Extensions.response_mappers import to_user_response
+from Services.Interfaces.i_user_service import IUserService
 
 
-class UserService:
-    def __init__(self, database_connection):
-        self.database_connection = database_connection
+class UserService(IUserService):
 
-    async def create_user(self, user_request: UserRequest):
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            logger.error("Database connection could not be established")
-            return None
+    async def create_user(self, unit_of_work: IUnitOfWork, request: UserRequest) -> uuid.UUID:
+        user, _ = await self.stage_new_user(unit_of_work, request)
+        await save_changes_async(unit_of_work, conflict=EMAIL_IN_USE)
 
-        try:
-            async with connection.cursor(DictCursor) as cursor:
-                # Check if the user already exists
-                await cursor.execute(USER_QUERIES["CHECK_EXISTING_USER"], (user_request.email,))
-                existing_user = await cursor.fetchone()
+        logger.info(f"Created user {user.Id}")
+        return user.Id
 
-                if existing_user:
-                    logger.warning(f"User with email {user_request.email} already exists")
-                    return None
+    async def stage_new_user(self, unit_of_work: IUnitOfWork, request: UserRequest) -> tuple[User, Role]:
+        role = await unit_of_work.roles.get_by_id_async(request.role_id)
+        if role is None:
+            raise NotFoundError(f"Role with Id {request.role_id} does not exist.")
 
-                # Hash the password before inserting it
-                hashed_password = hash_password(user_request.password)
+        if await unit_of_work.users.exists_async(User.Email == request.email):
+            raise ConflictError(EMAIL_IN_USE)
 
-                # Insert new user (GUID primary key generated here; the database does not generate it)
-                user_id = new_guid()
-                logger.info("Inserting into user table")
-                await cursor.execute(USER_QUERIES["INSERT_NEW_USER"], (
-                    to_db_guid(user_id),
-                    user_request.last_name,
-                    user_request.first_name,
-                    user_request.email,
-                    user_request.role_id,
-                    hashed_password
-                ))
-                await connection.commit()
+        user = unit_of_work.users.add_single(User(
+            LastName=request.last_name,
+            FirstName=request.first_name,
+            Email=request.email,
+            RoleId=role.Id,
+            Password=await hash_password_async(request.password),
+        ))
+        return user, role
 
-                return user_id
+    async def toggle_user_active_status(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID) -> bool:
+        # Locked, so two toggles of the same user at the same time cannot both read the old status.
+        user = await unit_of_work.users.get_by_id_async(user_id, for_update=True)
+        if user is None:
+            raise NotFoundError(f"User with Id {user_id} does not exist.")
 
-        except Exception as e:
-            logger.error(f"Error creating user: {e}", exc_info=True)
-            await connection.rollback()
-            return None
+        new_status = not user.Active
+        unit_of_work.users.update_single(user, {"Active": new_status})
+        await save_changes_async(unit_of_work, failed=f"The status of user {user_id} could not be changed.")
 
-        finally:
-            await self.database_connection.release_connection(connection)
+        logger.info(f"User {user_id} active status changed to {new_status}.")
+        return new_status
 
-    async def toggle_user_active_status(self, user_id: uuid.UUID):
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
+    async def update_user(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID,
+                          request: UpdateUserRequest) -> UserResponse:
+        user = await unit_of_work.users.get_by_id_async(user_id, includes=["Role"])
+        if user is None:
+            raise NotFoundError(f"User with Id {user_id} does not exist.")
 
-        try:
-            async with connection.cursor(DictCursor) as cursor:
-                await cursor.execute(USER_QUERIES["GET_USER_ACTIVE_STATUS"], (to_db_guid(user_id),))
-                user = await cursor.fetchone()
+        await self.stage_user_update(unit_of_work, user, request)
+        await save_changes_async(unit_of_work, conflict=EMAIL_IN_USE)
 
-                if not user:
-                    logger.warning(f"User with ID {user_id} not found.")
-                    return None
+        logger.info(f"Updated user {user_id}")
+        return to_user_response(user, user.Role)
 
-                logger.info(f"Found {user['LastName']} {user['FirstName']}")
-                active_status = user["Active"] if "Active" in user else None
+    async def stage_user_update(self, unit_of_work: IUnitOfWork, user: User, request: UpdateUserRequest) -> User:
+        if await unit_of_work.users.exists_async(User.Email == request.email, User.Id != user.Id):
+            raise ConflictError(EMAIL_IN_USE)
 
-                new_status = 0 if active_status == 1 else 1
+        return unit_of_work.users.update_single(user, {
+            "LastName": request.last_name,
+            "FirstName": request.first_name,
+            "Email": request.email,
+        })
 
-                # Update the active status
-                logger.info(f"Updating the status of {user['LastName']} {user['FirstName']} "
-                            f"with status {user['Active'] == 1}")
-                await cursor.execute(USER_QUERIES["TOGGLE_USER_ACTIVE_STATUS"], (new_status, to_db_guid(user_id)))
-                await connection.commit()
+    async def delete_user(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID) -> None:
+        user = await unit_of_work.users.get_by_id_async(user_id, includes=["Staff", "customer"])
+        if user is None:
+            raise NotFoundError(f"User with Id {user_id} does not exist.")
 
-                logger.info(f"User ID {user_id} active status changed to {bool(new_status)}.")
-                return bool(new_status)
+        if user.Staff is not None or user.customer is not None:
+            raise DeleteRestrictedError(f"User {user_id} has a staff or customer record; delete the staff member or "
+                                        f"the customer instead.")
+        await self.ensure_user_can_be_deleted(unit_of_work, user_id)
 
-        except Exception as e:
-            logger.error(f"Error toggling active status for user {user_id}: {e}", exc_info=True)
-            await connection.rollback()
-            return None
+        unit_of_work.users.delete_single(user)
+        await save_changes_async(unit_of_work, restricted=f"User {user_id} is still referenced by other records.")
+        logger.info(f"Deleted user {user_id}")
 
-        finally:
-            await self.database_connection.release_connection(connection)
+    async def ensure_user_can_be_deleted(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID) -> None:
+        if await unit_of_work.accounts.exists_async(Account.UserId == user_id):
+            raise DeleteRestrictedError(f"User {user_id} has accounts and cannot be deleted.")
 
-    async def update_user(self, user_id: uuid.UUID, update_request: UpdateUserRequest):
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
-
-        try:
-            async with connection.cursor() as cursor:
-                # Start a transaction
-                await connection.begin()
-
-                # Check if the user exists
-                await cursor.execute(USER_QUERIES["GET_USER_BY_ID"], (to_db_guid(user_id),))
-                user = await cursor.fetchone()
-
-                if not user:
-                    logger.warning(f"User with ID {user_id} not found.")
-                    return None
-
-                await cursor.execute(USER_QUERIES["UPDATE_USER"], (update_request.last_name, update_request.first_name,
-                                                                   update_request.email, to_db_guid(user_id)))
-
-                await connection.commit()
-
-                return True
-
-        except Exception as e:
-            logger.error(f"Error updating user with ID {user_id}: {e}", exc_info=True)
-            await connection.rollback()
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def delete_user(self, user_id: uuid.UUID):
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
-
-        try:
-            async with connection.cursor(DictCursor) as cursor:
-                logger.info(f"Checking if the user with user id {user_id} exists")
-                await cursor.execute(USER_QUERIES["GET_USER_BY_ID"], (to_db_guid(user_id),))
-                user = await cursor.fetchone()
-
-                if not user:
-                    logger.warning(f"User with Id {user_id} not found.")
-                    return None
-
-                logger.info(f"Deleting user {user['FirstName']} {user['LastName']} (Id: {user_id})")
-
-                await cursor.execute(USER_QUERIES["DELETE_USER"], (to_db_guid(user_id),))
-
-                logger.info(f"User with Id {user_id} successfully deleted.")
-                return True
-
-        except Exception as e:
-            logger.error(f"Error deleting user with ID {user_id}: {e}", exc_info=True)
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
+        if await unit_of_work.transactions.exists_async(or_(Transaction.UserId == user_id,
+                                                            Transaction.SenderId == user_id)):
+            raise DeleteRestrictedError(f"User {user_id} has transactions and cannot be deleted.")

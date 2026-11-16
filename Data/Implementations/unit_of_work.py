@@ -1,4 +1,4 @@
-"""SQLAlchemy 2.x (AsyncSession) implementation of IUnitofWork.
+"""SQLAlchemy 2.x (AsyncSession) implementation of IUnitOfWork.
 
 See Data/Interfaces/i_unit_of_work.py for how a unit of work is used.
 """
@@ -13,16 +13,16 @@ from sqlalchemy.orm import Session, UOWTransaction
 
 from Data.Implementations.repository import DEFAULT_BATCH_SIZE, LoadedState, Repository, RepositoryContext
 from Data.Interfaces.i_repository import IRepository, TEntity
-from Data.Interfaces.i_unit_of_work import IUnitofWork, SaveChangesResult
+from Data.Interfaces.i_unit_of_work import IUnitOfWork, SaveChangesResult
 from Data.database_orm_async import Database
 from Models.Entities import (Account, AccountType, Customer, Role, Staff, Transaction, TransactionMode,
                              TransactionStatus, TransactionType, User)
 from Models.Entities.base_entity import BaseEntity
 
-TUnitOfWork = TypeVar("TUnitOfWork", bound="UnitofWork")
+TUnitOfWork = TypeVar("TUnitOfWork", bound="UnitOfWork")
 
 
-class UnitofWork(IUnitofWork):
+class UnitOfWork(IUnitOfWork):
     """One AsyncSession, the repositories that work on it, and the changes staged through them."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None, *,
@@ -42,7 +42,7 @@ class UnitofWork(IUnitofWork):
 
     async def __aenter__(self: TUnitOfWork) -> TUnitOfWork:
         if self._context is not None:
-            raise RuntimeError("this unit of work is already active; use a new UnitofWork for a nested operation")
+            raise RuntimeError("this unit of work is already active; use a new UnitOfWork for a nested operation")
         session = self._session_factory()
         # Staged changes reach the database only in save_changes_async(); queries must not flush them early.
         session.sync_session.autoflush = False
@@ -160,7 +160,7 @@ class UnitofWork(IUnitofWork):
 
     def _active_context(self) -> RepositoryContext:
         if self._context is None:
-            raise RuntimeError("the unit of work is not active; use it inside 'async with UnitofWork() as ...'")
+            raise RuntimeError("the unit of work is not active; use it inside 'async with UnitOfWork() as ...'")
         return self._context
 
 

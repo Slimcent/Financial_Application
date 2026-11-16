@@ -1,342 +1,239 @@
 import uuid
+from collections.abc import Sequence
+from decimal import Decimal
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload, selectinload
+
+from Data.Interfaces.i_unit_of_work import IUnitOfWork
 from Infrastructure.Logging.logger import logger
-from datetime import datetime
-from aiomysql import DictCursor
-from typing import List, Optional
-from collections import defaultdict
-from Models.Dtos.Request.UserRequest import UserRequest
-from Models.Dtos.Response.UserResponse import UserResponse
 from Models.Constants.AppConstants import AppConstants
 from Models.Dtos.Request.CustomerRequest import CustomerRequest
 from Models.Dtos.Request.CustomerUpdateRequest import CustomerUpdateRequest
-from Services.Handler.AccountNumber import generate_account_number
-from Data.SqlQueries.account_sql_queries import ACCOUNT_QUERIES
 from Models.Dtos.Request.UpdateUserRequest import UpdateUserRequest
-from Data.SqlQueries.customer_sql_queries import CUSTOMER_QUERIES
-from Data.SqlQueries.account_type_sql_queries import ACCOUNT_TYPE_QUERIES
+from Models.Dtos.Request.UserRequest import UserRequest
+from Models.Dtos.Request.base_request import AccountNumber
 from Models.Dtos.Response.AccountsResponse import AccountsResponse
-from Data.Extensions.guid import from_db_guid, new_guid, to_db_guid
+from Models.Dtos.Response.UserResponse import UserResponse
+from Models.Entities import Account, AccountType, Customer, Transaction, User
+from Services.Exceptions.domain_exceptions import (BusinessRuleError, ConflictError, DeleteRestrictedError,
+                                                   NotFoundError)
+from Services.Extensions.exception_handler import (EMAIL_IN_USE_MESSAGE, integrity_constraint_name,
+                                                   save_changes_async, validated)
+from Services.Extensions.response_mappers import to_accounts_response, to_customer_response, to_user_response
+from Services.Handler.AccountNumber import generate_account_number
+from Services.Interfaces.i_customer_service import ICustomerService
+from Services.Interfaces.i_user_service import IUserService
+
+# What the customer responses read: the customer's user, its role, and its accounts with their account types.
+CUSTOMER_INCLUDES = ("user.Role", "user.accounts.account_type")
+
+# The same objects for a list of customers that is sorted through a join on Users: the users, roles and accounts are
+# loaded by separate queries (SELECT ... IN), so Users is not joined a second time for loading.
+CUSTOMER_LIST_INCLUDES = (
+    selectinload(Customer.user).options(joinedload(User.Role),
+                                        selectinload(User.accounts).joinedload(Account.account_type)),
+)
+
+# Generated account numbers tried before giving up (a collision is already unlikely: 10^8 numbers per type).
+MAX_ACCOUNT_NUMBER_ATTEMPTS = 10
+
+# Saves tried when the generated account number was taken by another operation between the check and the save.
+MAX_SAVE_ATTEMPTS = 3
+
+OPENING_BALANCE = Decimal("0.00")
+
+# Unique constraints the customer operations can violate (names from NAMING_CONVENTION, see the migrations).
+EMAIL_CONSTRAINT = "uq_Users_Email"
+ACCOUNT_NUMBER_CONSTRAINT = "uq_Accounts_AccountNumber"
+ACCOUNT_PER_TYPE_CONSTRAINT = "uq_Accounts_UserId_AccountTypeId"
+CUSTOMER_PER_USER_CONSTRAINT = "uq_Customers_UserId"
+
+CONFLICT_MESSAGES = {
+    EMAIL_CONSTRAINT: EMAIL_IN_USE_MESSAGE,
+    ACCOUNT_NUMBER_CONSTRAINT: "No free account number could be assigned; please try again.",
+    ACCOUNT_PER_TYPE_CONSTRAINT: "The customer already has an account of this account type.",
+    CUSTOMER_PER_USER_CONSTRAINT: "The user is already a customer.",
+}
+CUSTOMER_CONFLICT_MESSAGE = "The customer data conflicts with existing data."
 
 
-class CustomerService:
-    def __init__(self, database_connection, user_service):
-        self.database_connection = database_connection
+class CustomerService(ICustomerService):
+    def __init__(self, user_service: IUserService):
         self.user_service = user_service
         self.constants = AppConstants
 
-    async def create_customer(self, customer_request: CustomerRequest):
-        # Built before any database work so an invalid request is raised to the caller
-        # instead of being logged as a database failure.
+    async def create_customer(self, unit_of_work: IUnitOfWork, request: CustomerRequest) -> UserResponse:
         user_request = UserRequest(
-            last_name=customer_request.last_name,
-            first_name=customer_request.first_name,
-            email=customer_request.email,
-            password=customer_request.password,
+            last_name=request.last_name,
+            first_name=request.first_name,
+            email=request.email,
+            password=request.password,
             role_id=self.constants.CustomerRoleId,
         )
 
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
+        account_type = await self._get_account_type(unit_of_work, request.account_type_id)
 
-        try:
-            async with connection.cursor() as cursor:
-                await connection.begin()
+        # The user, the customer record and the first account are saved together: all of them or none. A failed
+        # save discards what was staged, so each attempt stages new objects.
+        for attempt in range(1, MAX_SAVE_ATTEMPTS + 1):
+            user, role = await self.user_service.stage_new_user(unit_of_work, user_request)
+            customer = unit_of_work.customers.add_single(Customer(user=user, Address=request.address))
+            account_number = await self._new_account_number_async(unit_of_work, account_type.Id)
+            account = unit_of_work.accounts.add_single(Account(user=user, AccountTypeId=account_type.Id,
+                                                               AccountNumber=account_number,
+                                                               Balance=OPENING_BALANCE))
+            if await self._save_retrying_account_number_async(unit_of_work, attempt):
+                break
 
-                # The account insert needs a valid account type; check it before the user is created
-                # so an unknown account type does not leave a user without a customer record.
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ACCOUNT_TYPE_BY_ID"],
-                                     (customer_request.account_type_id,))
-                if not await cursor.fetchone():
-                    logger.warning(f"Account type with Id {customer_request.account_type_id} does not exist. "
-                                   f"Customer {customer_request.email} was not created.")
-                    await connection.rollback()
-                    return None
+        logger.info(f"Created customer {customer.Id} and account {account.Id} for user {user.Id}")
+        return to_user_response(user, role, customer=customer, accounts=[to_accounts_response(account, account_type)])
 
-                account_number = await generate_account_number(customer_request.account_type_id)
-
-                # Create user first
-                logger.info("Creating customer as user first")
-                user_id = await self.user_service.create_user(user_request)
-
-                if not user_id:
-                    raise Exception("Failed to create user for customer")
-
-                logger.info(f"Created user with Id: {user_id}")
-
-                # Insert into Customers table (GUID primary key generated here)
-                customer_id = new_guid()
-                await cursor.execute(CUSTOMER_QUERIES["CREATE_CUSTOMER"],
-                                     (to_db_guid(customer_id), to_db_guid(user_id), customer_request.address))
-
-                logger.info(f"Created customer with Id: {customer_id}")
-
-                # Insert into Accounts table (GUID primary key generated here)
-                await cursor.execute(ACCOUNT_QUERIES["CREATE_ACCOUNT"],
-                                     (to_db_guid(new_guid()), to_db_guid(user_id), customer_request.account_type_id,
-                                      account_number, 0.0))
-
-                await connection.commit()
-
-                logger.info(f"Customer and account created successfully for User Id {user_id}")
-                return user_id
-
-        except Exception as e:
-            logger.error(f"Error creating customer: {e}", exc_info=True)
-            await connection.rollback()
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def update_customer(self, user_id: uuid.UUID, customer_request: CustomerUpdateRequest):
-        # Built before any database work so an invalid request is raised to the caller
-        # instead of being logged as a database failure.
+    async def update_customer(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID,
+                              request: CustomerUpdateRequest) -> UserResponse:
         user_update_request = UpdateUserRequest(
-            last_name=customer_request.last_name,
-            first_name=customer_request.first_name,
-            email=customer_request.email,
+            last_name=request.last_name,
+            first_name=request.first_name,
+            email=request.email,
         )
 
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
+        customer = await self._get_customer(unit_of_work, user_id, CUSTOMER_INCLUDES)
 
+        # The address and the user details are saved together.
+        await self.user_service.stage_user_update(unit_of_work, customer.user, user_update_request)
+        unit_of_work.customers.update_single(customer, {"Address": request.address})
+        await self._save_async(unit_of_work)
+
+        logger.info(f"Updated customer with User Id {user_id}")
+        return to_customer_response(customer)
+
+    async def delete_customer(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID) -> None:
+        customer = await self._get_customer(unit_of_work, user_id, ("user.Staff",))
+
+        if customer.user.Staff is not None:
+            raise DeleteRestrictedError(f"User {user_id} is also a staff member and cannot be deleted as a customer.")
+        await self.user_service.ensure_user_can_be_deleted(unit_of_work, user_id)
+
+        # The customer record and its user are deleted together (the customer row first).
+        unit_of_work.customers.delete_single(customer)
+        unit_of_work.users.delete_single(customer.user)
+        await save_changes_async(unit_of_work,
+                                 restricted=f"Customer with User Id {user_id} is still referenced by other records.")
+
+        logger.info(f"Deleted customer with User Id {user_id}")
+
+    async def deactivate_customer_account(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID) -> UserResponse:
+        customer = await self._get_customer(unit_of_work, user_id, CUSTOMER_INCLUDES)
+
+        # The customer's user and every account of the customer that is still active are deactivated together, in
+        # one transaction. The accounts are selected when the unit of work saves, so an account opened after the
+        # customer was loaded is deactivated too.
+        if customer.user.Active:
+            unit_of_work.users.update_single(customer.user, {"Active": False})
+        unit_of_work.accounts.update_range(Account.UserId == user_id, Account.Active.is_(True),
+                                           values={"Active": False})
+        await self._save_async(unit_of_work)
+
+        logger.info(f"Deactivated customer with User Id {user_id} and the customer's accounts")
+        return to_customer_response(customer)
+
+    async def get_all_customers(self, unit_of_work: IUnitOfWork) -> list[UserResponse]:
+        # Joined for sorting only; the related objects come from CUSTOMER_LIST_INCLUDES.
+        statement = unit_of_work.customers.query().join(Customer.user).order_by(User.LastName, User.FirstName)
+        customers = await unit_of_work.customers.get_range_async(statement, includes=CUSTOMER_LIST_INCLUDES)
+
+        logger.info(f"Retrieved {len(customers)} customers.")
+        return [to_customer_response(customer) for customer in customers]
+
+    async def get_customer_by_id(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID) -> UserResponse:
+        return to_customer_response(await self._get_customer(unit_of_work, user_id, CUSTOMER_INCLUDES))
+
+    async def open_account(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID,
+                           account_type_id: int) -> AccountsResponse:
+        customer = await self._get_customer(unit_of_work, user_id, ("user",))
+        if not customer.user.Active:
+            raise BusinessRuleError(f"Customer {user_id} is deactivated; no account can be opened.")
+        account_type = await self._get_account_type(unit_of_work, account_type_id)
+
+        if await unit_of_work.accounts.exists_async(Account.UserId == user_id, Account.AccountTypeId == account_type_id):
+            raise ConflictError(f"Customer {user_id} already has a {account_type.Type} account.")
+
+        for attempt in range(1, MAX_SAVE_ATTEMPTS + 1):
+            account_number = await self._new_account_number_async(unit_of_work, account_type_id)
+            account = unit_of_work.accounts.add_single(Account(UserId=user_id, AccountTypeId=account_type_id,
+                                                               AccountNumber=account_number,
+                                                               Balance=OPENING_BALANCE))
+            if await self._save_retrying_account_number_async(unit_of_work, attempt):
+                break
+
+        logger.info(f"Opened {account_type.Type} account {account.Id} for customer {user_id}")
+        return to_accounts_response(account, account_type)
+
+    async def close_account(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID, account_number: str) -> None:
+        account_number = validated(AccountNumber, account_number, "account number")
+        await self._get_customer(unit_of_work, user_id, ())
+
+        # Locked, so the balance cannot change between the check and the deletion.
+        account = await unit_of_work.accounts.get_single_async(Account.AccountNumber == account_number,
+                                                               Account.UserId == user_id, for_update=True)
+        if account is None:
+            raise NotFoundError(f"Customer {user_id} has no account with this account number.")
+
+        if account.Balance != 0:
+            raise BusinessRuleError("The account still holds a balance; transfer it before closing the account.")
+        if await unit_of_work.transactions.exists_async(Transaction.AccountId == account.Id):
+            raise DeleteRestrictedError("The account has transactions and cannot be closed.")
+
+        unit_of_work.accounts.delete_single(account)
+        await save_changes_async(unit_of_work, restricted="The account is still referenced by other records.")
+
+        logger.info(f"Closed account {account.Id} of customer {user_id}")
+
+    @staticmethod
+    async def _get_customer(unit_of_work: IUnitOfWork, user_id: uuid.UUID, includes: Sequence[str]) -> Customer:
+        customer = await unit_of_work.customers.get_single_async(Customer.UserId == user_id, includes=includes)
+        if customer is None:
+            raise NotFoundError(f"Customer with User Id {user_id} does not exist.")
+        return customer
+
+    @staticmethod
+    async def _get_account_type(unit_of_work: IUnitOfWork, account_type_id: int) -> AccountType:
+        account_type = await unit_of_work.account_types.get_by_id_async(account_type_id)
+        if account_type is None:
+            raise NotFoundError(f"Account type with Id {account_type_id} does not exist.")
+        return account_type
+
+    @staticmethod
+    async def _new_account_number_async(unit_of_work: IUnitOfWork, account_type_id: int) -> str:
+        """A generated account number that no account uses yet. (Another operation can still take it before this
+        one saves; the save then fails on the unique constraint and is retried with a new number.)"""
+        for _ in range(MAX_ACCOUNT_NUMBER_ATTEMPTS):
+            account_number = generate_account_number(account_type_id)
+            if not await unit_of_work.accounts.exists_async(Account.AccountNumber == account_number):
+                return account_number
+        raise ConflictError(CONFLICT_MESSAGES[ACCOUNT_NUMBER_CONSTRAINT])
+
+    @staticmethod
+    async def _save_retrying_account_number_async(unit_of_work: IUnitOfWork, attempt: int) -> bool:
+        """Save what is staged. True when saved; False when the generated account number was taken by another
+        operation meanwhile and another attempt is left: the unit of work has discarded the staged changes, and
+        the caller stages them again with a new account number. Any other violation raises the matching domain error
+        (a ConflictError with the message of the unique constraint the database reported, see CONFLICT_MESSAGES)."""
         try:
-            async with connection.cursor(DictCursor) as cursor:
-                # Get the existing customer details
-                await cursor.execute(CUSTOMER_QUERIES["GET_Single_CUSTOMER"], (to_db_guid(user_id),))
-                customer = await cursor.fetchone()
+            await CustomerService._save_async(unit_of_work)
+            return True
+        except ConflictError as error:
+            violation = error.__cause__
+            taken = (isinstance(violation, IntegrityError)
+                     and integrity_constraint_name(violation) == ACCOUNT_NUMBER_CONSTRAINT)
+            if taken and attempt < MAX_SAVE_ATTEMPTS:
+                logger.warning(f"Account number taken while saving (attempt {attempt} of {MAX_SAVE_ATTEMPTS}); "
+                               f"retrying with a new account number.")
+                return False
+            raise
 
-                if not customer:
-                    logger.warning(f"Customer with UserId {user_id} not found.")
-                    return None
-
-                logger.info(f"Updating user details for customer with UserId {user_id}.")
-
-                # Update user details
-                user_updated = await self.user_service.update_user(user_id, user_update_request)
-
-                if not user_updated:
-                    logger.error(f"User details for customer with UserId {user_id} could not be updated "
-                                 f"(the email address may already be in use). The address was not changed.")
-                    return None
-
-                # Update customer address
-                logger.info(f"Updating address for customer with UserId {user_id}.")
-                await cursor.execute(CUSTOMER_QUERIES["UPDATE_CUSTOMER"], (customer_request.address, to_db_guid(user_id)))
-
-                # Commit the transaction
-                await connection.commit()
-                logger.info(f"Successfully updated customer {user_id}.")
-                return True
-
-        except Exception as e:
-            logger.error(f"Error updating customer {user_id}: {e}", exc_info=True)
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def delete_customer(self, user_id: uuid.UUID):
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
-
-        try:
-            async with connection.cursor(DictCursor) as cursor:
-
-                await cursor.execute(CUSTOMER_QUERIES["GET_Single_CUSTOMER"], (to_db_guid(user_id),))
-                customer = await cursor.fetchone()
-
-                if not customer:
-                    logger.warning(f"Customer with UserId {user_id} not found.")
-                    return None
-
-                await cursor.execute(CUSTOMER_QUERIES["DELETE_CUSTOMER"], (to_db_guid(user_id),))
-                logger.info(f"Successfully deleted customer with UserId {user_id}.")
-
-                await self.user_service.delete_user(user_id)
-
-                return True
-
-        except Exception as e:
-            logger.error(f"Error deleting customer with UserId {user_id}: {e}", exc_info=True)
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def get_all_customers(self) -> Optional[List[UserResponse]]:
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
-
-        try:
-            async with connection.cursor(DictCursor) as cursor:
-                await cursor.execute(CUSTOMER_QUERIES["GET_ALL_CUSTOMERS"])
-                customers = await cursor.fetchall()
-
-                if not customers:
-                    logger.info("No customers found.")
-                    return []
-
-                # Dictionary to group account types by UserId
-                customer_dict = defaultdict(lambda: {
-                    "user_id": None,
-                    "customer_id": None,
-                    "staff_id": None,
-                    "first_name": None,
-                    "last_name": None,
-                    "email": None,
-                    "address": None,
-                    "position": None,
-                    "role_id": None,
-                    "role_name": None,
-                    "balance": None,
-                    "active": None,
-                    "created_at": None,
-                    "accounts": []
-                })
-
-                for customer in customers:
-                    user_id = customer["UserId"]
-                    if customer_dict[user_id]["user_id"] is None:
-                        customer_dict[user_id].update({
-                            "user_id": from_db_guid(user_id),
-                            "customer_id": from_db_guid(customer["CustomerId"]),
-                            "first_name": customer["FirstName"],
-                            "last_name": customer["LastName"],
-                            "email": customer["Email"],
-                            "address": customer["Address"],
-                            "role_id": customer["RoleId"],
-                            "role_name": customer["RoleName"],
-                            "balance": str(customer["Balance"]),
-                            "active": customer["Active"] == 1,
-                            "created_at": customer["CreatedAt"] if isinstance(customer["CreatedAt"], datetime) else None
-                        })
-
-                    # Append account type to the list
-                    if customer["AccountTypeId"]:
-                        customer_dict[user_id]["accounts"].append({
-                            "account_type_id": customer["AccountTypeId"],
-                            "account_type": customer["AccountType"]
-                        })
-
-                # Convert dictionary values to UserResponse objects
-                customer_list = [
-                    UserResponse(
-                        user_id=data["user_id"],
-                        customer_id=data["customer_id"],
-                        first_name=data["first_name"],
-                        last_name=data["last_name"],
-                        email=data["email"],
-                        address=data["address"],
-                        position=data["position"],
-                        role_id=data["role_id"],
-                        role_name=data["role_name"],
-                        active=data["active"],
-                        created_at=data["created_at"],
-                        accounts=data["accounts"]
-                    )
-                    for data in customer_dict.values()
-                ]
-
-                logger.info(f"Retrieved {len(customer_list)} customers.")
-                return customer_list
-
-        except Exception as e:
-            logger.error(f"Error retrieving customers: {e}", exc_info=True)
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def get_customer_by_id(self, user_id: uuid.UUID) -> UserResponse | None:
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return None
-
-        try:
-            async with connection.cursor(DictCursor) as cursor:
-                await cursor.execute(CUSTOMER_QUERIES["GET_CUSTOMER_BY_USER_ID"], (to_db_guid(user_id),))
-                customer_rows = await cursor.fetchall()
-
-                if not customer_rows:
-                    logger.warning(f"Customer with User Id {user_id} not found.")
-                    return None
-
-                accounts = []
-
-                for row in customer_rows:
-                    if row["AccountId"] is not None:
-                        accounts.append(AccountsResponse(
-                            account_id=from_db_guid(row["AccountId"]),
-                            account_number=row["AccountNumber"],
-                            balance=row["Balance"],
-                            account_type_id=row["AccountTypeId"],
-                            account_type=row["AccountType"]
-                        ))
-
-                first_row = customer_rows[0]
-                user_response = UserResponse(
-                    user_id=from_db_guid(first_row["UserId"]),
-                    customer_id=from_db_guid(first_row["CustomerId"]),
-                    last_name=first_row["LastName"],
-                    first_name=first_row["FirstName"],
-                    email=first_row["Email"],
-                    address=first_row["Address"],
-                    role_id=first_row["RoleId"],
-                    role_name=first_row["RoleName"],
-                    accounts=accounts,
-                    active=first_row["Active"] == 1,
-                    created_at=first_row["CreatedAt"] if first_row["CreatedAt"] else None,
-                )
-
-                return user_response
-
-        except Exception as e:
-            logger.error(f"Error getting customer with Id {user_id}: {e}", exc_info=True)
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def add_or_update_account_type(self, user_id: uuid.UUID, account_type_id: int) -> bool:
-        connection = await self.database_connection.get_connection()
-        if not connection:
-            return False
-
-        try:
-            async with connection.cursor(DictCursor) as cursor:
-                logger.info(f"Getting all existing account types for user {user_id}...")
-                await cursor.execute(CUSTOMER_QUERIES["GET_CUSTOMER_ACCOUNT_TYPES"], (to_db_guid(user_id),))
-                existing_account_types = {row["AccountTypeId"] for row in await cursor.fetchall()}
-
-                if not existing_account_types:
-                    logger.warning(f"Customer with user Id {user_id} does not exist.")
-                    return False
-
-                account_number = await generate_account_number(account_type_id=account_type_id)
-
-                if account_type_id in existing_account_types:
-                    logger.info(f"Account type {account_type_id} already exists for customer {user_id}. "
-                                f"No action needed.")
-                    return True
-
-                # If account type does not exist, insert it
-                logger.info(f"Adding new account type {account_type_id} for user {user_id}...")
-                await cursor.execute(CUSTOMER_QUERIES["CREATE_ACCOUNT"], (to_db_guid(new_guid()), to_db_guid(user_id),
-                                                                          account_type_id, account_number, 0.0))
-                await connection.commit()
-
-                logger.info(f"Account type {account_type_id} successfully added for user {user_id}.")
-                return True
-
-        except Exception as e:
-            logger.error(f"Error adding account type for user {user_id}: {e}", exc_info=True)
-            await connection.rollback()
-            return False
-
-        finally:
-            await self.database_connection.release_connection(connection)
+    @staticmethod
+    async def _save_async(unit_of_work: IUnitOfWork) -> None:
+        """Save what is staged; a violation raises the matching domain error (see save_changes_async), a unique
+        violation with the message of its constraint (CONFLICT_MESSAGES)."""
+        await save_changes_async(unit_of_work, conflict=CUSTOMER_CONFLICT_MESSAGE, conflicts=CONFLICT_MESSAGES)

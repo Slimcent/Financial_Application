@@ -9,6 +9,7 @@ COLUMNS = {
     "AccountTypeId": ("INTEGER", False),
     "AccountNumber": ("VARCHAR(10)", False),
     "Balance": ("DECIMAL(18, 2)", False),
+    "Active": ("BOOL", False),
 }
 RELATIONSHIPS = {
     "user": ("User", "MANYTOONE", False, "accounts", frozenset({"Accounts.UserId=Users.Id"})),
@@ -55,3 +56,10 @@ def test_balance_is_a_decimal_starting_at_zero():
     assert balance.type.asdecimal is True
     assert balance.default.arg == Decimal("0.00")
     assert balance.server_default.arg == "0.00"
+
+
+def test_new_account_is_active_by_default():
+    active = Account.__table__.c["Active"]
+
+    assert active.default.arg is True
+    assert active.server_default is not None

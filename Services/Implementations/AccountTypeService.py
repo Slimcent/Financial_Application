@@ -1,160 +1,65 @@
+from Data.Interfaces.i_unit_of_work import IUnitOfWork
 from Infrastructure.Logging.logger import logger
-from aiomysql import DictCursor
 from Models.Dtos.Request.AccountTypeRequest import AccountTypeRequest
 from Models.Dtos.Response.AccountTypeResponse import AccountTypeResponse
-from Data.SqlQueries.account_type_sql_queries import ACCOUNT_TYPE_QUERIES
+from Models.Entities import Account, AccountType
+from Services.Exceptions.domain_exceptions import ConflictError, DeleteRestrictedError, NotFoundError
+from Services.Extensions.exception_handler import save_changes_async
+from Services.Extensions.response_mappers import to_account_type_response
+from Services.Interfaces.i_account_type_service import IAccountTypeService
 
 
-class AccountTypeService:
-    def __init__(self, _database_connection):
-        self.database_connection = _database_connection
+class AccountTypeService(IAccountTypeService):
 
-    async def get_all_account_types(self):
-        try:
-            connection = await self.database_connection.get_connection()
-            if not connection:
-                logger.error("Failed to get database connection in get_all_account_types.")
-                return []
+    async def get_all_account_types(self, unit_of_work: IUnitOfWork) -> list[AccountTypeResponse]:
+        account_types = await unit_of_work.account_types.get_range_async(order_by=[AccountType.Id])
 
-            async with connection.cursor(DictCursor) as cursor:
-                logger.info("Executing query: SELECT * FROM AccountTypes")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ALL_ACCOUNT_TYPES"])
-                account_types = await cursor.fetchall()
+        logger.info(f"Retrieved {len(account_types)} account types.")
+        return [to_account_type_response(account_type) for account_type in account_types]
 
-            await self.database_connection.release_connection(connection)
+    async def get_account_type_by_id(self, unit_of_work: IUnitOfWork, account_type_id: int) -> AccountTypeResponse:
+        return to_account_type_response(await self._get_account_type(unit_of_work, account_type_id))
 
-            logger.info(f"Retrieved {len(account_types)} account types.")
-            return [
-                AccountTypeResponse(account_type_id=row["Id"], name=row["Type"])
-                for row in account_types
-            ]
-        except Exception as e:
-            logger.error(f"Error in get_all_account_types: {e}")
-            return []
+    async def add_account_type(self, unit_of_work: IUnitOfWork, request: AccountTypeRequest) -> AccountTypeResponse:
+        if await unit_of_work.account_types.exists_async(AccountType.Type == request.name):
+            raise ConflictError(f"Account type '{request.name}' already exists.")
 
-    async def get_account_type_by_id(self, account_type_id: int):
-        try:
-            connection = await self.database_connection.get_connection()
-            if not connection:
-                logger.error("Failed to get database connection in get_account_type_by_id.")
-                return None
+        account_type = unit_of_work.account_types.add_single(AccountType(Type=request.name))
+        await save_changes_async(unit_of_work, conflict=f"Account type '{request.name}' already exists.")
 
-            async with connection.cursor(DictCursor) as cursor:
-                logger.info(f"Executing query: SELECT * FROM AccountTypes WHERE Id = {account_type_id}")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ACCOUNT_TYPE_BY_ID"], (account_type_id,))
-                account_type = await cursor.fetchone()
+        logger.info(f"New account type added with Id {account_type.Id}")
+        return to_account_type_response(account_type)
 
-            await self.database_connection.release_connection(connection)
+    async def update_account_type(self, unit_of_work: IUnitOfWork, account_type_id: int,
+                                  request: AccountTypeRequest) -> AccountTypeResponse:
+        account_type = await self._get_account_type(unit_of_work, account_type_id)
 
-            if account_type:
-                logger.info(f"Account type found: {account_type['Type']}")
-                return AccountTypeResponse(
-                    account_type_id=account_type["Id"],
-                    name=account_type["Type"]
-                )
-            else:
-                logger.warning(f"Account type with ID {account_type_id} not found.")
-                return None
-        except Exception as e:
-            logger.error(f"Error in get_account_type_by_id: {e}")
-            return None
+        if await unit_of_work.account_types.exists_async(AccountType.Type == request.name,
+                                                         AccountType.Id != account_type_id):
+            raise ConflictError(f"Account type '{request.name}' already exists.")
 
-    async def add_account_type(self, request: AccountTypeRequest):
-        try:
-            connection = await self.database_connection.get_connection()
-            if not connection:
-                logger.error("Failed to get database connection in add_account_type.")
-                return None
+        unit_of_work.account_types.update_single(account_type, {"Type": request.name})
+        await save_changes_async(unit_of_work, conflict=f"Account type '{request.name}' already exists.")
 
-            async with connection.cursor(DictCursor) as cursor:
-                # Check if the name already exists
-                logger.info(f"Checking if account type '{request.name}' already exists.")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ACCOUNT_TYPE_BY_NAME"], (request.name,))
-                existing_account_type = await cursor.fetchone()
+        logger.info(f"Account type with Id {account_type_id} updated.")
+        return to_account_type_response(account_type)
 
-                if existing_account_type:
-                    logger.warning(f"Account type '{request.name}' already exists.")
-                    return None
+    async def delete_account_type(self, unit_of_work: IUnitOfWork, account_type_id: int) -> None:
+        account_type = await self._get_account_type(unit_of_work, account_type_id)
 
-                # Insert new account type
-                logger.info(f"Inserting new account type: {request.name}")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["INSERT_ACCOUNT_TYPE"], (request.name,))
-                await connection.commit()
+        if await unit_of_work.accounts.exists_async(Account.AccountTypeId == account_type_id):
+            raise DeleteRestrictedError(f"Account type '{account_type.Type}' is used by accounts and cannot be "
+                                        f"deleted.")
 
-                new_id = cursor.lastrowid
-                logger.info(f"New account type added with ID {new_id}")
-                return AccountTypeResponse(account_type_id=new_id, name=request.name)
+        unit_of_work.account_types.delete_single(account_type)
+        await save_changes_async(unit_of_work, restricted=f"Account type '{account_type.Type}' is used by accounts and "
+                                                          f"cannot be deleted.")
 
-        except Exception as e:
-            logger.error(f"Error adding account type '{request.name}': {e}")
-            await connection.rollback()
-            return None
+        logger.info(f"Account type with Id {account_type_id} deleted.")
 
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def update_account_type(self, account_type_id: int, request: AccountTypeRequest):
-        try:
-            connection = await self.database_connection.get_connection()
-            if not connection:
-                logger.error("Failed to get database connection in update_account_type.")
-                return None
-
-            async with connection.cursor(DictCursor) as cursor:
-                # Check if the account type exists
-                logger.info(f"Checking if account type with ID {account_type_id} exists.")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ACCOUNT_TYPE_BY_ID"], (account_type_id,))
-                existing_account_type = await cursor.fetchone()
-
-                if not existing_account_type:
-                    logger.warning(f"Account type with ID {account_type_id} not found.")
-                    return None
-
-                # Update the account type
-                logger.info(f"Updating account type with ID {account_type_id} to '{request.name}'")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["UPDATE_ACCOUNT_TYPE"], (request.name, account_type_id))
-                await connection.commit()
-
-                logger.info(f"Account type with ID {account_type_id} updated successfully.")
-                return AccountTypeResponse(account_type_id=account_type_id, name=request.name)
-
-        except Exception as e:
-            logger.error(f"Error updating account type with ID {account_type_id}: {e}")
-            await connection.rollback()
-            return None
-
-        finally:
-            await self.database_connection.release_connection(connection)
-
-    async def delete_account_type(self, account_type_id: int):
-        try:
-            connection = await self.database_connection.get_connection()
-            if not connection:
-                logger.error("Failed to get database connection in delete_account_type.")
-                return False
-
-            async with connection.cursor(DictCursor) as cursor:
-                # Check if the account type exists
-                logger.info(f"Checking if account type with ID {account_type_id} exists.")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["SELECT_ACCOUNT_TYPE_BY_ID"], (account_type_id,))
-                existing_account_type = await cursor.fetchone()
-
-                if not existing_account_type:
-                    logger.warning(f"Account type with ID {account_type_id} not found.")
-                    return False
-
-                # Delete the account type
-                logger.info(f"Deleting account type with ID {account_type_id}")
-                await cursor.execute(ACCOUNT_TYPE_QUERIES["DELETE_ACCOUNT_TYPE"], (account_type_id,))
-                await connection.commit()
-
-                logger.info(f"Account type with ID {account_type_id} deleted successfully.")
-                return True
-
-        except Exception as e:
-            logger.error(f"Error deleting account type with ID {account_type_id}: {e}")
-            await connection.rollback()
-            return False
-
-        finally:
-            await self.database_connection.release_connection(connection)
+    @staticmethod
+    async def _get_account_type(unit_of_work: IUnitOfWork, account_type_id: int) -> AccountType:
+        account_type = await unit_of_work.account_types.get_by_id_async(account_type_id)
+        if account_type is None:
+            raise NotFoundError(f"Account type with Id {account_type_id} does not exist.")
+        return account_type

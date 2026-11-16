@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import AsyncAdaptedQueuePool, StaticPool
 
-from Data.Implementations.unit_of_work import UnitofWork
+from Data.Implementations.unit_of_work import UnitOfWork
 from Models.Entities import (Account, AccountType, Base, Customer, Role, Staff, Transaction, TransactionMode,
                              TransactionStatus, TransactionType, User)
 
@@ -193,8 +193,8 @@ def _seed(seed_engine):
         session.flush()
 
         users = {}
-        for first_name, (last_name, role) in USERS.items():
-            users[first_name] = User(LastName=last_name, FirstName=first_name, Email=f"{first_name.lower()}@example.com",
+        for email_number, (first_name, (last_name, role)) in enumerate(USERS.items(), start=1):
+            users[first_name] = User(LastName=last_name, FirstName=first_name, Email=f"example{email_number}@example.com",
                                      RoleId=roles[role].Id, Password="hash")
             session.add(users[first_name])
             session.flush()
@@ -261,7 +261,7 @@ def result_of():
 @pytest_asyncio.fixture
 async def unit_of_work(session_factory):
     """An active unit of work on the test database."""
-    async with UnitofWork(session_factory) as active_unit_of_work:
+    async with UnitOfWork(session_factory) as active_unit_of_work:
         yield active_unit_of_work
 
 

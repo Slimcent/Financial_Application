@@ -11,4 +11,4 @@ class Pagination:
         start = (page - 1) * page_size
         end = start + page_size
         paginated_items = items[start:end]
-        return PagedResponse(total_count, page, page_size, paginated_items)
+        return PagedResponse(total_count=total_count, page=page, page_size=page_size, items=paginated_items)

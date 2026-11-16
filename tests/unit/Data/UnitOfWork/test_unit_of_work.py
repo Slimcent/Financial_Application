@@ -1,4 +1,4 @@
-"""UnitofWork (Data/Implementations/unit_of_work.py): session handling, disposal, saving and rolling back staged
+"""UnitOfWork (Data/Implementations/unit_of_work.py): session handling, disposal, saving and rolling back staged
 changes, and how `_async` repository operations behave inside a unit of work. Runs on SQLite.
 
 The test database starts with the rows described in tests/unit/Data/conftest.py (`bank`); `persisted` reads what
@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
 
-from Data.Implementations.unit_of_work import UnitofWork
+from Data.Implementations.unit_of_work import UnitOfWork
 from Data.Interfaces.i_unit_of_work import SaveChangesResult
 from Models.Entities import (Account, AccountType, Customer, Role, Staff, Transaction, TransactionMode,
                              TransactionStatus, TransactionType, User)
@@ -67,7 +67,7 @@ async def _balance(persisted, bank, number):
 
 class TestSessionHandling:
     async def test_unit_of_work_is_active_only_inside_its_block(self, session_factory):
-        unit_of_work = UnitofWork(session_factory)
+        unit_of_work = UnitOfWork(session_factory)
         assert not unit_of_work.is_active
 
         async with unit_of_work as entered:
@@ -78,7 +78,7 @@ class TestSessionHandling:
 
     async def test_queries_staged_and_async_operations_share_the_one_session_of_the_block(self, recording_factory,
                                                                                          new_role):
-        async with UnitofWork(recording_factory) as unit_of_work:
+        async with UnitOfWork(recording_factory) as unit_of_work:
             await unit_of_work.accounts.get_range_async()
             unit_of_work.roles.add_single(new_role())
             await unit_of_work.roles.add_single_async(new_role())
@@ -89,7 +89,7 @@ class TestSessionHandling:
         assert recording_factory.sessions[0].calls == ["commit", "commit", "commit", "close"]
 
     async def test_every_block_gets_a_new_session(self, recording_factory):
-        unit_of_work = UnitofWork(recording_factory)
+        unit_of_work = UnitOfWork(recording_factory)
 
         for _ in range(2):
             async with unit_of_work:
@@ -113,7 +113,7 @@ class TestSessionHandling:
     ])
     async def test_unit_of_work_must_be_active(self, session_factory, operation, result_of):
         with pytest.raises(RuntimeError, match="not active"):
-            await result_of(operation(UnitofWork(session_factory)))
+            await result_of(operation(UnitOfWork(session_factory)))
 
     @pytest.mark.parametrize("name, model", REPOSITORY_MODELS, ids=[name for name, _ in REPOSITORY_MODELS])
     async def test_repository_property_works_on_its_entity(self, unit_of_work, name, model):
@@ -123,7 +123,7 @@ class TestSessionHandling:
         assert repository is unit_of_work.get_repository(model)
 
     async def test_one_repository_per_entity_type_in_a_block(self, session_factory):
-        unit_of_work = UnitofWork(session_factory)
+        unit_of_work = UnitOfWork(session_factory)
         async with unit_of_work:
             first = unit_of_work.accounts
             assert unit_of_work.accounts is first
@@ -145,7 +145,7 @@ class TestSessionHandling:
 
 class TestDisposal:
     async def test_session_is_closed_and_its_connection_returned_when_the_block_ends(self, recording_factory, engine):
-        async with UnitofWork(recording_factory) as unit_of_work:
+        async with UnitOfWork(recording_factory) as unit_of_work:
             await unit_of_work.accounts.count_async()
             assert engine.pool.checkedout() == 1
 
@@ -154,7 +154,7 @@ class TestDisposal:
 
     async def test_leaving_without_saving_discards_the_staged_changes(self, recording_factory, bank, persisted,
                                                                      new_role):
-        async with UnitofWork(recording_factory) as unit_of_work:
+        async with UnitOfWork(recording_factory) as unit_of_work:
             role = unit_of_work.roles.add_single(new_role())
             account = await unit_of_work.accounts.get_by_id_async(bank.account_id("2600000001"))
             unit_of_work.accounts.update_single(account, {"Balance": Decimal("1.00")})
@@ -168,7 +168,7 @@ class TestDisposal:
     async def test_block_that_raises_is_rolled_back_and_closed_and_the_error_propagates(self, recording_factory,
                                                                                         engine, persisted, new_role):
         with pytest.raises(LookupError, match="stop"):
-            async with UnitofWork(recording_factory) as unit_of_work:
+            async with UnitOfWork(recording_factory) as unit_of_work:
                 role = unit_of_work.roles.add_single(new_role())
                 await unit_of_work.accounts.count_async()
                 raise LookupError("stop")
@@ -179,14 +179,14 @@ class TestDisposal:
 
     async def test_session_that_fails_to_close_is_invalidated(self, closing_fails_factory, engine):
         with pytest.raises(ConnectionError, match="while closing"):
-            async with UnitofWork(closing_fails_factory) as unit_of_work:
+            async with UnitOfWork(closing_fails_factory) as unit_of_work:
                 await unit_of_work.accounts.count_async()
 
         assert closing_fails_factory.sessions[0].calls == ["close", "invalidate"]
         assert engine.pool.checkedout() == 0
 
     async def test_unit_of_work_is_not_active_after_a_failed_close(self, closing_fails_factory):
-        unit_of_work = UnitofWork(closing_fails_factory)
+        unit_of_work = UnitOfWork(closing_fails_factory)
 
         with pytest.raises(ConnectionError):
             async with unit_of_work:
@@ -196,14 +196,14 @@ class TestDisposal:
 
     @pytest.mark.parametrize("operation", ENDED_UNIT_OF_WORK_OPERATIONS)
     async def test_repository_of_an_ended_unit_of_work_stops_working(self, session_factory, operation, result_of):
-        async with UnitofWork(session_factory) as unit_of_work:
+        async with UnitOfWork(session_factory) as unit_of_work:
             accounts = unit_of_work.accounts
 
         with pytest.raises(RuntimeError, match="has ended"):
             await result_of(operation(accounts))
 
     async def test_entities_stay_readable_after_the_block(self, session_factory, bank):
-        async with UnitofWork(session_factory) as unit_of_work:
+        async with UnitOfWork(session_factory) as unit_of_work:
             account = await unit_of_work.accounts.get_by_id_async(bank.account_id("2600000001"), includes=["user"])
 
         assert inspect(account).detached
@@ -211,7 +211,7 @@ class TestDisposal:
 
     async def test_entities_keep_their_loaded_values_after_a_block_that_raised(self, session_factory, bank):
         with pytest.raises(LookupError):
-            async with UnitofWork(session_factory) as unit_of_work:
+            async with UnitOfWork(session_factory) as unit_of_work:
                 account = await unit_of_work.accounts.get_by_id_async(bank.account_id("2600000001"),
                                                                       includes=["user"])
                 unit_of_work.accounts.update_single(account, {"Balance": Decimal("1.00")})
@@ -227,7 +227,7 @@ class TestDisposal:
 
 class TestSaveChanges:
     async def test_every_staged_change_is_persisted_in_one_commit(self, recording_factory, bank, persisted, new_role):
-        async with UnitofWork(recording_factory) as unit_of_work:
+        async with UnitOfWork(recording_factory) as unit_of_work:
             role = unit_of_work.roles.add_single(new_role())
             account = await unit_of_work.accounts.get_by_id_async(bank.account_id("2600000001"))
             unit_of_work.accounts.update_single(account, {"Balance": Decimal("1.00")})
@@ -303,7 +303,7 @@ class TestSaveChanges:
 
     async def test_failed_save_persists_nothing_and_discards_the_staged_changes(self, recording_factory, bank,
                                                                                persisted, new_role):
-        async with UnitofWork(recording_factory) as unit_of_work:
+        async with UnitOfWork(recording_factory) as unit_of_work:
             account = await unit_of_work.accounts.get_by_id_async(bank.account_id("2600000001"), includes=["user"])
             unit_of_work.accounts.update_single(account, {"Balance": Decimal("1.00")})
             role = unit_of_work.roles.add_single(new_role())

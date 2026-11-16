@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DECIMAL, CheckConstraint, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import DECIMAL, Boolean, CheckConstraint, ForeignKey, Integer, String, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from Models.Entities.base_entity import LAZY, BaseEntity
@@ -25,6 +25,8 @@ class Account(BaseEntity):
     # A balance accumulates many transaction amounts, so it has more whole digits than a single
     # Transactions.Amount (DECIMAL(10, 2)): up to 9,999,999,999,999,999.99.
     Balance: Mapped[Decimal] = mapped_column(DECIMAL(18, 2), default=Decimal("0.00"), server_default="0.00")
+    # A deactivated account is kept (with its balance and transaction history) but no longer in use.
+    Active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
     user: Mapped["User"] = relationship(back_populates="accounts", lazy=LAZY)
     # Joined on AccountId only (Transactions also has a composite foreign key to (Id, UserId)).

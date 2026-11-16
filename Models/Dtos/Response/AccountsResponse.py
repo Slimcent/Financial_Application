@@ -1,21 +1,14 @@
-import uuid
+from typing import Optional
+
+from Models.Dtos.Response.base_response import BaseResponse, GuidId, IntegerId, Money
 
 
-class AccountsResponse:
-    def __init__(self, account_id: uuid.UUID, account_number: str, balance: float, account_type_id: int, account_type: str):
-        self.account_id = account_id
-        self.account_number = account_number
-        self.balance = balance
-        self.account_type_id = account_type_id
-        self.account_type = account_type
+class AccountsResponse(BaseResponse):
+    """One account. ``active`` is False once the account is deactivated."""
 
-    def __repr__(self):
-        return (
-            f"AccountsResponse("
-            f"\n account_id={self.account_id},\n "
-            f"account_number='{self.account_number}',\n "
-            f"balance={self.balance},\n "
-            f"account_type_id={self.account_type_id},\n "
-            f"account_type='{self.account_type}'"
-            f")"
-        )
+    account_id: GuidId
+    account_number: str
+    balance: Money
+    account_type_id: IntegerId
+    account_type: Optional[str] = None
+    active: bool

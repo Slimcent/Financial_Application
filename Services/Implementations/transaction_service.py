@@ -1,417 +1,208 @@
 import uuid
-from typing import Optional, List
+from collections.abc import Sequence
+from typing import Any, Union
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import or_
 
-from Models.Dtos.Request.transaction_request import TransactionRequest, TransactionsRequest, FundsTransferRequest
-from Models.Dtos.Request.transaction_request import UserTransactionsRequest
+from Data.Interfaces.i_repository import Criterion
+from Data.Interfaces.i_unit_of_work import IUnitOfWork
+from Infrastructure.Logging.logger import logger
+from Models.Constants.AppConstants import AppConstants
+from Models.Dtos.Request.fund_account_request import FundAccountRequest
+from Models.Dtos.Request.transaction_request import FundsTransferRequest, TransactionsRequest, UserTransactionsRequest
 from Models.Dtos.Response.AccountResponse import AccountResponse
 from Models.Dtos.Response.AccountsResponse import AccountsResponse
 from Models.Dtos.Response.paged_response import PagedResponse
-from Models.Dtos.Response.transaction_response import TransactionResponse, TransactionsResponse
-from Models.Constants.AppConstants import AppConstants
-from Data.Implementations.transaction_repository import TransactionRepository
-from Services.Extensions.exception_handler import wrap_errors
-from Models.Pagination.Extensions.pagination import Pagination
-from Data.database_orm_async import Database
-from Models.Entities.transaction import Transaction
-from Models.Entities.user import User
+from Models.Dtos.Response.transaction_response import TransactionsResponse
+from Models.Entities import Account, Customer, Transaction, User
+from Models.Entities.column_types import uuid7
+from Services.Exceptions.domain_exceptions import BusinessRuleError, InsufficientFundsError, NotFoundError
+from Services.Extensions.exception_handler import save_changes_async
+from Services.Extensions.response_mappers import (TRANSACTION_INCLUDES, TRANSACTIONS_INCLUDES, to_accounts_response,
+                                                  to_transaction_response, to_transactions_response)
+from Services.Interfaces.i_transaction_service import ITransactionService
+
+# Newest first. Transactions recorded at the same instant are ordered by their (time-ordered) Id, so the order, and
+# with it every page and the most recent transactions, is stable.
+NEWEST_FIRST = (Transaction.TransactionDate.desc(), Transaction.Id.desc())
+
+# get_all_transactions_non_paginated() returns at most this many transactions: the most recent ones.
+RECENT_TRANSACTIONS_LIMIT = 15
 
 
-class TransactionService:
-    def __init__(self, transaction_repository: TransactionRepository):
-        self.transaction_repository = transaction_repository
+class TransactionService(ITransactionService):
+    def __init__(self):
         self.constants = AppConstants
-        self.db = Database()
 
-    async def get_customer_account(self, user_id: uuid.UUID, account_type_id: int) -> AccountResponse:
-        print("Transaction service")
-        account = await self.transaction_repository.get_customer_account(user_id, account_type_id)
+    async def fund_account(self, unit_of_work: IUnitOfWork, request: FundAccountRequest) -> AccountsResponse:
+        if request.transaction_type_id != self.constants.DepositTransactionTypeId:
+            raise BusinessRuleError("An account can only be funded with a deposit transaction.")
+        if request.transaction_mode_id != self.constants.CreditTransactionModeId:
+            raise BusinessRuleError("Funding an account credits it: the transaction mode must be credit.")
 
-        if not account:
-            raise ValueError("Account not found.")
+        # The account must belong to the customer in the request. The row stays locked until the unit of work
+        # saves, so no other operation changes the balance meanwhile.
+        account = await unit_of_work.accounts.get_single_async(
+            Account.AccountNumber == request.account_number,
+            Account.user.has(User.customer.has(Customer.Id == request.customer_id)),
+            includes=["user", "account_type"], for_update=True)
+        if account is None:
+            raise NotFoundError(f"Customer {request.customer_id} has no account with this account number.")
+        if not account.user.Active:
+            raise BusinessRuleError("The owner of the account is not active.")
+        if not account.Active:
+            raise BusinessRuleError("The account is not active.")
 
-        user = account.user
-        customer = account.user.customer
+        unit_of_work.accounts.update_single(account, {"Balance": account.Balance + request.amount})
+        unit_of_work.transactions.add_single(Transaction(
+            AccountId=account.Id,
+            UserId=account.UserId,
+            TransactionTypeId=request.transaction_type_id,
+            TransactionModeId=request.transaction_mode_id,
+            TransactionStatusId=self.constants.CompletedTransactionStatusId,
+            Amount=request.amount,
+            SenderId=account.UserId,
+            Description=request.description,
+        ))
+        # One transaction: the new balance and the transaction row are saved together, and the lock is released.
+        await save_changes_async(unit_of_work, failed="The account could not be funded.")
 
-        account_response = AccountsResponse(
-            account_id=account.Id,
-            account_number=account.AccountNumber,
-            balance=float(account.Balance),
-            account_type_id=account.account_type.Id,
-            account_type=account.account_type.Type
-        )
+        logger.info(f"Funded account {account.Id} with {request.amount}")
+        return to_accounts_response(account)
 
-        print("Finished mapping")
+    async def transfer_funds(self, unit_of_work: IUnitOfWork, request: FundsTransferRequest) -> AccountsResponse:
+        # Both rows are locked by one query in primary key order: concurrent transfers between the same accounts
+        # always lock in the same order, so they wait for each other instead of deadlocking.
+        accounts = await unit_of_work.accounts.get_range_async(
+            Account.AccountNumber.in_([request.sender_account_number, request.receiver_account_number]),
+            includes=["user", "account_type"], order_by=[Account.Id], for_update=True)
+        by_number = {account.AccountNumber: account for account in accounts}
 
+        sender = by_number.get(request.sender_account_number)
+        if sender is None:
+            raise NotFoundError("The sender account does not exist.")
+        receiver = by_number.get(request.receiver_account_number)
+        if receiver is None:
+            raise NotFoundError("The receiver account does not exist.")
+        if sender.Id == receiver.Id:
+            raise BusinessRuleError("You cannot transfer money to the same account.")
+        for side, account in (("sender", sender), ("receiver", receiver)):
+            if not account.user.Active:
+                raise BusinessRuleError(f"The owner of the {side} account is not active.")
+            if not account.Active:
+                raise BusinessRuleError(f"The {side} account is not active.")
+        if sender.Balance < request.amount:
+            raise InsufficientFundsError("The sender account has insufficient funds for this transfer.")
+
+        unit_of_work.accounts.update_single(sender, {"Balance": sender.Balance - request.amount})
+        unit_of_work.accounts.update_single(receiver, {"Balance": receiver.Balance + request.amount})
+
+        transfer_reference = uuid7()  # links the debit and the credit row of this transfer
+        unit_of_work.transactions.add_range([
+            self._transfer_row(sender, sender, request, self.constants.DebitTransactionModeId, transfer_reference),
+            self._transfer_row(receiver, sender, request, self.constants.CreditTransactionModeId, transfer_reference),
+        ])
+        # One transaction: both balances and both transaction rows are saved together, and the locks are released.
+        await save_changes_async(unit_of_work, failed="The transfer could not be completed.")
+
+        logger.info(f"Transferred {request.amount} from account {sender.Id} to account {receiver.Id} "
+                    f"(reference {transfer_reference})")
+        return to_accounts_response(sender)
+
+    async def get_user_transactions(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID) -> AccountResponse:
+        return await self._user_transactions(unit_of_work, user_id, [])
+
+    async def filter_user_transactions(self, unit_of_work: IUnitOfWork,
+                                       request: UserTransactionsRequest) -> AccountResponse:
+        return await self._user_transactions(unit_of_work, request.user_id, _filter_criteria(request))
+
+    async def get_all_transactions_paginated(self, unit_of_work: IUnitOfWork,
+                                             request: TransactionsRequest) -> PagedResponse[TransactionsResponse]:
+        page = await unit_of_work.transactions.get_range_async(
+            *_transactions_criteria(request), page=request.page, page_size=request.page_size,
+            includes=TRANSACTIONS_INCLUDES, order_by=NEWEST_FIRST)
+
+        return PagedResponse[TransactionsResponse](
+            total_count=page.total_count, page=page.page, page_size=page.page_size,
+            items=[to_transactions_response(transaction) for transaction in page.items])
+
+    async def get_all_transactions_non_paginated(self, unit_of_work: IUnitOfWork,
+                                                 request: TransactionsRequest) -> list[TransactionsResponse]:
+        # Not paged: only the most recent transactions that match.
+        transactions = await unit_of_work.transactions.get_range_async(
+            *_transactions_criteria(request), includes=TRANSACTIONS_INCLUDES, order_by=NEWEST_FIRST,
+            take=RECENT_TRANSACTIONS_LIMIT)
+
+        return [to_transactions_response(transaction) for transaction in transactions]
+
+    async def _user_transactions(self, unit_of_work: IUnitOfWork, user_id: uuid.UUID,
+                                 criteria: Sequence[Criterion]) -> AccountResponse:
+        user = await unit_of_work.users.get_by_id_async(user_id, includes=["customer"])
+        if user is None:
+            raise NotFoundError(f"User with Id {user_id} does not exist.")
+
+        transactions = await unit_of_work.transactions.get_range_async(
+            Transaction.UserId == user_id, *criteria, includes=TRANSACTION_INCLUDES, order_by=NEWEST_FIRST)
+        total_balance = await unit_of_work.accounts.sum_async(Account.Balance, Account.UserId == user_id)
+
+        customer = user.customer
         return AccountResponse(
             user_id=user.Id,
-            customer_id=customer.Id,
+            customer_id=customer.Id if customer is not None else None,
             last_name=user.LastName,
             first_name=user.FirstName,
+            address=customer.Address if customer is not None else None,
             email=user.Email,
-            accounts=[account_response],
-            balance=float(account.Balance),
-            total_balance=float(account.Balance)
+            active=user.Active,
+            transactions=[to_transaction_response(transaction) for transaction in transactions],
+            total_balance=total_balance,
         )
 
-    async def get_customer_accounts_with_user_id(self, user_id: uuid.UUID) -> AccountResponse:
-        user: User = await self.transaction_repository.get_customer_accounts_with_user_id(user_id)
-
-        if not user:
-            raise ValueError("user not found.")
-
-        account_responses = [
-            AccountsResponse(
-                account_id=account.Id,
-                account_number=account.AccountNumber,
-                balance=float(account.Balance),
-                account_type_id=account.AccountTypeId,
-                account_type=account.account_type.Type
-            )
-            for account in user.accounts
-        ]
-
-        total_balance = sum(account.Balance for account in user.accounts)
-
-        return AccountResponse(
-            user_id=user.Id,
-            customer_id=user.customer.Id,
-            last_name=user.LastName,
-            first_name=user.FirstName,
-            email=user.Email,
-            address=user.customer.Address,
-            accounts=account_responses,
-            total_balance=total_balance
+    def _transfer_row(self, account: Account, sender: Account, request: FundsTransferRequest, mode_id: int,
+                      transfer_reference: uuid.UUID) -> Transaction:
+        return Transaction(
+            AccountId=account.Id,
+            UserId=account.UserId,
+            TransactionTypeId=self.constants.TransferTransactionTypeId,
+            TransactionModeId=mode_id,
+            TransactionStatusId=self.constants.CompletedTransactionStatusId,
+            Amount=request.amount,
+            SenderId=sender.UserId,
+            Description=request.description,
+            TransferReference=transfer_reference,
         )
 
-    async def get_account_details_by_account_number(self, account_number: str) -> Optional[AccountsResponse]:
-        account = await self.transaction_repository.get_account_by_account_number(account_number)
-        if account:
-            return AccountsResponse(
-                account_id=account.Id,
-                account_number=account.AccountNumber,
-                balance=account.Balance,
-                account_type_id=account.AccountTypeId,
-                account_type=account.account_type.Type
-            )
-        return None
 
-    @wrap_errors
-    async def fund_account(self, account_number: str, amount: float = 0.0, description: str = None) -> AccountsResponse:
-        if amount <= 0:
-            print("Amount must be greater than zero")
-
-        if not account_number:
-            print("Account number is required")
-
-        account = await self.transaction_repository.get_account_by_account_number(account_number)
-        if not account:
-            print(f"Account with number {account_number} does not exist")
-
-        if not account.user:
-            print("Associated user not found")
-
-        if not account.user.Id:
-            print("User id can not be null")
-
-        print(f"User id = {account.user.Id}")
-
-        try:
-            async with self.db.get_session() as session:
-                async with session.begin():
-                    await self.transaction_repository.update_account_balance(account, amount, session=session)
-
-                    transaction_request = TransactionRequest(
-                        user_id=account.UserId,
-                        account_id=account.Id,
-                        account_number=account.AccountNumber,
-                        amount=amount,
-                        transaction_type_id=self.constants.DepositTransactionTypeId,
-                        transaction_mode_id=self.constants.CreditTransactionModeId,
-                        transaction_status_id=self.constants.CompletedTransactionStatusId,
-                        sender_id=account.UserId,
-                        description=description
-                    )
-
-                    await self.transaction_repository.create_transaction(transaction_request, session=session)
-
-            return AccountsResponse(
-                account_id=account.Id,
-                account_number=account.AccountNumber,
-                balance=account.Balance,
-                account_type_id=account.AccountTypeId,
-                account_type=account.account_type.Type
-            )
-
-        except TypeError as e:
-            raise ValueError("Failed to create transaction — please check your request structure.") from e
-
-        except SQLAlchemyError as e:
-            raise ValueError("Database operation failed") from e
-
-        except Exception as e:
-            raise ValueError(f"Unexpected error: {str(e)}") from e
-
-    async def get_user_transactions(self, user_id: uuid.UUID) -> AccountResponse:
-        user: User = await self.transaction_repository.get_user_transactions(user_id)
-
-        account_response = await map_user_transactions(user)
-
-        return account_response
-
-    async def filter_user_transactions(self, request: UserTransactionsRequest) -> AccountResponse:
-        user: User = await self.transaction_repository.get_user_transactions(request.user_id)
-
-        user = await filter_transactions(user, request)
-
-        account_response = await map_user_transactions(user)
-
-        return account_response
-
-    async def get_all_transactions_paginated(self, request: TransactionsRequest) -> PagedResponse[TransactionsResponse]:
-        transactions = await self.transaction_repository.get_all_transactions(request)
-
-        print("finished repo query")
-
-        response_list: List[TransactionsResponse] = []
-
-        for transaction in transactions:
-            user = transaction.user
-            account = transaction.account
-            customer = getattr(user, "customer", None)
-            staff = getattr(user, "Staff", None)
-
-            response = TransactionsResponse(
-                user_id=user.Id,
-                first_name=user.FirstName,
-                last_name=user.LastName,
-                email=user.Email,
-                address=user.customer.Address if customer else None,
-                customer_id=customer.Id if customer else None,
-                staff_id=staff.Id if staff else None,
-                account_id=account.Id,
-                account_number=account.AccountNumber,
-                amount=transaction.Amount,
-                account_type_id=account.account_type.Id,
-                account_type=account.account_type.Type if account.account_type else None,
-                transaction_type_id=transaction.TransactionTypeId,
-                transaction_type=transaction.transaction_type.Name if transaction.transaction_type else None,
-                transaction_mode_id=transaction.TransactionModeId,
-                transaction_mode=transaction.transaction_mode.Name if transaction.transaction_mode else None,
-                transaction_status_id=transaction.TransactionStatusId,
-                transaction_status=transaction.transaction_status.Name if transaction.transaction_status else None,
-                transaction_date=transaction.TransactionDate,
-                description=transaction.Description,
-                sender_id=transaction.SenderId,
-                sender=f"{transaction.sender.FirstName} {transaction.sender.LastName}" if transaction.sender else None
-            )
-
-            response_list.append(response)
-
-        return Pagination.paginate(request.page, request.page_size, response_list)
-
-    async def get_all_transactions_non_paginated(self, request: TransactionsRequest) -> List[TransactionsResponse]:
-        transactions = await self.transaction_repository.get_all_transactions(request)
-
-        response_list: List[TransactionsResponse] = []
-
-        for transaction in transactions:
-            user = transaction.user
-            account = transaction.account
-            customer = getattr(user, "customer", None)
-            staff = getattr(user, "Staff", None)
-
-            response = TransactionsResponse(
-                user_id=user.Id,
-                first_name=user.FirstName,
-                last_name=user.LastName,
-                email=user.Email,
-                address=user.customer.Address if customer else None,
-                customer_id=customer.Id if customer else None,
-                staff_id=staff.Id if staff else None,
-                account_id=account.Id,
-                account_number=account.AccountNumber,
-                amount=transaction.Amount,
-                account_type_id=account.account_type.Id,
-                account_type=account.account_type.Type if account.account_type else None,
-                transaction_type_id=transaction.TransactionTypeId,
-                transaction_type=transaction.transaction_type.Name if transaction.transaction_type else None,
-                transaction_mode_id=transaction.TransactionModeId,
-                transaction_mode=transaction.transaction_mode.Name if transaction.transaction_mode else None,
-                transaction_status_id=transaction.TransactionStatusId,
-                transaction_status=transaction.transaction_status.Name if transaction.transaction_status else None,
-                transaction_date=transaction.TransactionDate,
-                description=transaction.Description,
-                sender_id=transaction.SenderId,
-                sender=f"{transaction.sender.FirstName} {transaction.sender.LastName}" if transaction.sender else None
-            )
-
-            response_list.append(response)
-
-        for r in response_list:
-            print(repr(r))
-
-        return response_list
-
-    async def transfer_funds(self, request: FundsTransferRequest) -> AccountsResponse:
-        if request.amount <= 0:
-            print("Amount must be greater than zero")
-
-        if not request.sender_account_number:
-            print("Sender account number is required")
-
-        if not request.receiver_account_number:
-            print("Sender account number is required")
-
-        try:
-            async with self.db.get_session() as session:
-                async with session.begin():
-
-                    print("get sender account")
-                    sender_account = await self.transaction_repository.get_account_by_account_number(
-                        request.sender_account_number, session=session)
-
-                    if not sender_account:
-                        print("Sender account not found")
-
-                    if not sender_account.user.Active:
-                        print("Sender account not active")
-
-                    if sender_account.Balance < request.amount:
-                        print("Insufficient funds")
-
-                    print("retrieved sender account")
-
-                    receiver_account = await self.transaction_repository.get_account_by_account_number(
-                        request.receiver_account_number, session=session)
-
-                    if not receiver_account:
-                        print("Receiver account not found")
-
-                    if sender_account.AccountNumber == receiver_account.AccountNumber:
-                        print("You cannot transfer money to yourself")
-
-                    await self.transaction_repository.update_account_balance(sender_account, -request.amount, session)
-
-                    await self.transaction_repository.update_account_balance(receiver_account, request.amount, session)
-
-                    transaction_requests = [
-                        TransactionRequest(
-                            user_id=sender_account.UserId,
-                            account_id=sender_account.Id,
-                            account_number=sender_account.AccountNumber,
-                            amount=request.amount,
-                            transaction_type_id=self.constants.TransferTransactionTypeId,
-                            transaction_mode_id=self.constants.DebitTransactionModeId,
-                            transaction_status_id=self.constants.CompletedTransactionStatusId,
-                            sender_id=sender_account.UserId,
-                            description=request.description
-                        ),
-
-                        TransactionRequest(
-                            user_id=receiver_account.UserId,
-                            account_id=receiver_account.Id,
-                            account_number=receiver_account.AccountNumber,
-                            transaction_type_id=self.constants.TransferTransactionTypeId,
-                            transaction_mode_id=self.constants.CreditTransactionModeId,
-                            transaction_status_id=self.constants.CompletedTransactionStatusId,
-                            amount=request.amount,
-                            sender_id=sender_account.UserId,
-                            description=request.description,
-                        )
-                    ]
-
-                    await self.transaction_repository.create_transactions(transaction_requests, session)
-
-                    return AccountsResponse(
-                        account_id=sender_account.Id,
-                        account_number=sender_account.AccountNumber,
-                        balance=sender_account.Balance,
-                        account_type_id=sender_account.AccountTypeId,
-                        account_type=sender_account.account_type.Type
-                    )
-
-        except Exception as e:
-            print(f"Transfer failed: {e}")
-            raise
-
-
-async def filter_transactions(user: User, request: UserTransactionsRequest) -> User:
+def _filter_criteria(request: Union[UserTransactionsRequest, TransactionsRequest]) -> list[Any]:
+    """SQL conditions for the filters both transaction requests have."""
+    criteria: list[Any] = []
+    if request.sender_id is not None:
+        criteria.append(Transaction.SenderId == request.sender_id)
     if request.account_type_id is not None:
-        user.transactions = [
-            transaction for transaction in user.transactions
-            if transaction.account.account_type.Id == request.account_type_id
-        ]
-
+        criteria.append(Transaction.account.has(Account.AccountTypeId == request.account_type_id))
     if request.transaction_type_id is not None:
-        user.transactions = [
-            transaction for transaction in user.transactions
-            if transaction.transaction_type.Id == request.transaction_type_id
-        ]
-
+        criteria.append(Transaction.TransactionTypeId == request.transaction_type_id)
     if request.transaction_mode_id is not None:
-        user.transactions = [
-            transaction for transaction in user.transactions
-            if transaction.transaction_mode.Id == request.transaction_mode_id
-        ]
-
-    if request.account_number is not None:
-        user.transactions = [
-            transaction for transaction in user.transactions
-            if transaction.account.AccountNumber == request.account_number
-        ]
-
+        criteria.append(Transaction.TransactionModeId == request.transaction_mode_id)
     if request.transaction_status_id is not None:
-        user.transactions = [
-            transaction for transaction in user.transactions
-            if transaction.transaction_status.Id == request.transaction_status_id
-        ]
-
-    return user
+        criteria.append(Transaction.TransactionStatusId == request.transaction_status_id)
+    if request.account_number is not None:
+        criteria.append(Transaction.account.has(Account.AccountNumber == request.account_number))
+    return criteria
 
 
-async def map_user_transactions(user: User) -> AccountResponse:
-    transactions_responses: List[TransactionResponse] = []
-    total_balance = 0.0
-
-    for transaction in user.transactions:
-        account = transaction.account
-        account_type = account.account_type
-        transaction_type = transaction.transaction_type
-        transaction_mode = transaction.transaction_mode
-        transaction_status = transaction.transaction_status
-
-        total_balance += float(transaction.Amount)
-
-        transactions_responses.append(
-            TransactionResponse(
-                account_id=account.Id,
-                account_number=account.AccountNumber,
-                amount=float(transaction.Amount),
-                account_type_id=account_type.Id,
-                account_type=account_type.Type,
-                transaction_type_id=transaction_type.Id,
-                transaction_type=transaction_type.Name,
-                transaction_mode_id=transaction_mode.Id,
-                transaction_mode=transaction_mode.Name,
-                transaction_status_id=transaction_status.Id,
-                transaction_status=transaction_status.Name,
-                transaction_date=transaction.TransactionDate,
-                description=transaction.Description,
-            )
-        )
-
-    customer = user.customer
-    account_response = AccountResponse(
-        user_id=user.Id,
-        customer_id=customer.Id if customer else None,
-        last_name=user.LastName,
-        first_name=user.FirstName,
-        email=user.Email,
-        address=customer.Address if customer else None,
-        transactions=transactions_responses,
-        total_balance=total_balance
-    )
-
-    return account_response
+def _transactions_criteria(request: TransactionsRequest) -> list[Any]:
+    """SQL conditions for TransactionsRequest: its filters, the account owner and the search term."""
+    criteria = _filter_criteria(request)
+    if request.user_id is not None:
+        criteria.append(Transaction.UserId == request.user_id)
+    if request.search_term is not None:
+        term = request.search_term
+        # autoescape: % and _ in the search term are matched literally, not as wildcards.
+        criteria.append(or_(
+            Transaction.user.has(or_(User.FirstName.icontains(term, autoescape=True),
+                                     User.LastName.icontains(term, autoescape=True),
+                                     User.Email.icontains(term, autoescape=True))),
+            Transaction.account.has(Account.AccountNumber.icontains(term, autoescape=True)),
+        ))
+    return criteria

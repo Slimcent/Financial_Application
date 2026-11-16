@@ -7,7 +7,7 @@ Naming convention
 * ``_single`` works on one entity, ``_range`` on many (bulk).
 * Only methods ending in ``_async`` are awaited; every other method is a plain call.
 * No suffix: NOT persisted. The change is staged in the unit of work and written, together with every other
-  staged change and in the order the operations were called, when ``IUnitofWork.save_changes_async()`` runs.
+  staged change and in the order the operations were called, when ``IUnitOfWork.save_changes_async()`` runs.
 * ``_async`` suffix on add / update / delete / save: persisted at once. The operation runs on the unit of
   work's own session (so it never waits on row locks the unit of work holds) in a transaction of its own:
   changes staged in the unit of work are set aside while it runs and kept, staged, afterwards. Only the data
@@ -177,12 +177,24 @@ class IRepository(ABC, Generic[TEntity]):
     async def count_async(self, *criteria: Any) -> int:
         """The number of rows that match the criteria (or the statement); no criteria counts every row."""
 
-    @abstractmethod
+    @overload
     async def sum_async(self, column: QueryableAttribute[Any] | ColumnElement[Any],
-                        *criteria: Criterion) -> Number:
-        """The sum of a numeric column (or expression) over the matching rows; 0 when no row matches.
+                        *criteria: Criterion) -> Number: ...
 
-        Example: ``await accounts.sum_async(Account.Balance, Account.UserId == user_id)``.
+    @overload
+    async def sum_async(self, column: QueryableAttribute[Any] | ColumnElement[Any],
+                        statement: Select[Any], /) -> Number: ...
+
+    @abstractmethod
+    async def sum_async(self, column: QueryableAttribute[Any] | ColumnElement[Any], *criteria: Any) -> Number:
+        """The sum of a numeric column (or expression) over the rows that match the criteria (or the statement);
+        no criteria sums over every row, and the result is 0 when no row matches.
+
+        A statement (built from ``query()``) is optional and allows joins, e.g. summing the balances of the
+        accounts whose owner is active. Its ordering, offset and limit are ignored, as in count_async().
+
+        Examples: ``await accounts.sum_async(Account.Balance, Account.UserId == user_id)``;
+        ``await accounts.sum_async(Account.Balance, accounts.query().join(Account.user).where(User.Active))``.
         """
 
     @overload
