@@ -9,3 +9,15 @@ venv/
 
 # Ignore Python cache files
 __pycache__/
+.pytest_cache/
+.venv/
+.ruff_cache/
+.mypy_cache/
+*.py[cod]
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+dist/
+build/
+.vscode/
