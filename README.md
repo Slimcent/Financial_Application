@@ -12,26 +12,29 @@ The project separates application workflows, business logic, persistence, models
 * Staff management
 * User management
 * Account ownership and customer relationships
-* Authentication service
 * Active account and user validation
+* Customer deactivation (the customer and all of the customer's accounts)
+* Deleting users, customers and staff only when they have no accounts or transactions
 
 ### Account Management
 
 * Create and manage customer accounts
 * Support different account types
+* Open and close accounts
 * Retrieve accounts by user
 * Retrieve account details by account number
-* Track individual account balances
+* Track individual account balances and whether each account is active
 * Calculate total balances across customer accounts
 
 ### Transaction Processing
 
 * Fund customer accounts
 * Transfer funds between accounts
-* Validate sender and receiver accounts
+* Validate that sender and receiver accounts and their owners are active
 * Prevent transfers with insufficient funds
 * Prevent transfers to the same account
-* Record debit and credit sides of transfers
+* Record debit and credit sides of transfers, linked by a transfer reference
+* Lock the accounts involved while their balances change
 * Maintain transaction status, type, and mode
 * Retrieve customer transaction history
 * Filter transactions by different criteria
@@ -46,8 +49,11 @@ The project separates application workflows, business logic, persistence, models
 * PyMySQL
 * aiomysql
 * Alembic
+* pydantic
+* bcrypt
 * python-dotenv
 * asyncio
+* pytest and pytest-asyncio (tests on SQLite with aiosqlite)
 
 ## Architecture
 
@@ -67,59 +73,47 @@ Financial_Application
 │   ├── ProcessAccount.py
 │   └── ProcessTransaction.py
 │
-├── Dtos
-│   └── Request and response models
+├── Services
+│   ├── Interfaces          (IUserService, IStaffService, ICustomerService, ...)
+│   ├── Implementations     (UserService, StaffService, CustomerService, ...)
+│   ├── Exceptions          (domain errors)
+│   ├── Extensions          (error translation, response mapping)
+│   └── Handler             (account number generation)
+│
+├── Data
+│   ├── Interfaces          (IRepository, IUnitOfWork)
+│   ├── Implementations     (Repository, UnitOfWork)
+│   ├── Seed                (lookup seeding)
+│   ├── Migrations          (Alembic)
+│   ├── database_orm.py
+│   └── database_orm_async.py
+│
+├── Models
+│   ├── Entities            (SQLAlchemy entities)
+│   ├── Dtos                (request and response models)
+│   ├── Constants
+│   └── Pagination
 │
 ├── Infrastructure
-│   └── Application constants and infrastructure configuration
+│   ├── DependencyInjection (composition root)
+│   ├── Logging
+│   └── Security.py         (password hashing)
 │
-├── Repository
-│   └── Database access and persistence operations
-│
-├── Service
-│   ├── AccountService.py
-│   ├── AccountTypeService.py
-│   ├── AuthenticationService.py
-│   ├── CustomerService.py
-│   ├── StaffService.py
-│   ├── UserService.py
-│   └── transaction_service.py
-│
-├── SqlQueries
-│   └── SQL-related functionality
-│
-├── Utility
-│   └── Shared application utilities
-│
-├── models
-│   ├── User
-│   ├── Customer
-│   ├── Staff
-│   ├── Account
-│   ├── Account Type
-│   ├── Transaction
-│   ├── Transaction Type
-│   ├── Transaction Mode
-│   ├── Transaction Status
-│   └── Role
-│
-├── alembic
-│   └── Database migration files
-│
-├── database_orm.py
-├── database_orm_async.py
+├── Api                     (reserved for API routers)
+├── tests
+├── docs
 └── main.py
 ```
 
-The structure separates application orchestration from business services and persistence logic.
+The structure separates application orchestration from business services and persistence logic. See [docs/architecture.md](docs/architecture.md) for details.
 
 ## Database
 
 The application uses MySQL with SQLAlchemy.
 
-Both synchronous and asynchronous database configurations are included in the repository, while the asynchronous implementation uses SQLAlchemy's `AsyncSession` and the `aiomysql` MySQL driver.
+Both synchronous and asynchronous database configurations are included in the repository: the asynchronous one (SQLAlchemy's `AsyncSession` with the `aiomysql` driver) is used by the application, the synchronous one by Alembic.
 
-Database configuration is loaded from environment variables.
+Configuration is loaded from environment variables.
 
 Expected variables include:
 
@@ -129,6 +123,7 @@ DB_PASSWORD=your_database_password
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=your_database_name
+BCRYPT_ROUNDS=12    # optional: cost of password hashing (4 to 31, default 12)
 ```
 
 ## Asynchronous Database Access
@@ -141,17 +136,18 @@ This allows database operations to be performed without blocking the application
 
 ## Transaction Processing
 
-Transactions are handled through the service and repository layers.
+Transactions are handled by the service layer through the unit of work and the generic repository.
 
 ### Account Funding
 
 When an account is funded, the application:
 
-1. Retrieves the account.
-2. Validates the account and associated user.
-3. Updates the account balance.
-4. Creates a credit transaction.
-5. Records the transaction as completed.
+1. Checks that the request is a deposit (credit).
+2. Retrieves the customer's account and locks it.
+3. Validates that the account and its owner are active.
+4. Updates the account balance.
+5. Creates a credit transaction.
+6. Records the transaction as completed.
 
 ### Fund Transfer
 
@@ -159,16 +155,15 @@ A transfer involves two accounts.
 
 The application:
 
-1. Retrieves the sender account.
-2. Verifies that the sender is active.
-3. Checks that sufficient funds are available.
-4. Retrieves the receiver account.
-5. Ensures the sender and receiver are different.
-6. Debits the sender.
-7. Credits the receiver.
-8. Creates corresponding debit and credit transaction records.
+1. Retrieves and locks the sender and receiver accounts in one query, in a fixed order.
+2. Verifies that both accounts and their owners are active.
+3. Ensures the sender and receiver are different.
+4. Checks that sufficient funds are available.
+5. Debits the sender.
+6. Credits the receiver.
+7. Creates corresponding debit and credit transaction records that share a transfer reference.
 
-The balance updates and transaction creation are performed within the same database transaction.
+The balance updates and transaction creation are saved in one database transaction: all of them or none.
 
 ## Transaction History
 
@@ -181,8 +176,10 @@ Transactions can also be filtered using information such as:
 * Transaction type
 * Transaction mode
 * Transaction status
+* Sender
+* A search term (account owner's name or email, account number)
 
-Pagination support is available for retrieving larger collections of transactions.
+Filtering and pagination are done by the database. The non-paginated list returns the 15 most recent matching transactions.
 
 ## Data Models
 
@@ -201,11 +198,11 @@ The domain model includes entities representing:
 
 These models are mapped to the relational database through SQLAlchemy.
 
-## Repository Pattern
+## Repository Pattern and Unit of Work
 
-Database operations are separated from the business logic through repository classes.
+Database operations are separated from the business logic through a generic repository and a unit of work.
 
-The service layer communicates with repositories instead of embedding persistence operations directly into application workflows.
+Each service operation receives a unit of work from its caller, reads and stages changes through the unit of work's repositories, and saves them in one transaction. Services implement interfaces and are wired together in a composition root (`Infrastructure/DependencyInjection`). When an operation cannot be carried out, the service raises a domain error (for example not found, conflict or business rule) and nothing is saved.
 
 This provides a clearer separation between:
 
@@ -214,9 +211,9 @@ Application
     ↓
 Application Processing
     ↓
-Services
+Services (interfaces)
     ↓
-Repositories
+Unit of Work / Repositories
     ↓
 SQLAlchemy
     ↓
@@ -230,11 +227,21 @@ Alembic is included for managing changes to the database schema.
 The repository contains:
 
 ```
-alembic/
+Data/Migrations/
 alembic.ini
 ```
 
-which can be used to maintain database migrations as the models evolve.
+which can be used to maintain database migrations as the models evolve. Create or update the database schema with:
+
+```bash
+alembic upgrade head
+```
+
+The lookup data (roles, account types, transaction types, modes and statuses) is seeded by the application: missing rows are added when it starts, all of them on the first run. It can also be run on its own:
+
+```bash
+python -m Data.Seed.lookup_seed
+```
 
 ## Running the Application
 
@@ -255,7 +262,12 @@ DB_PORT=3306
 DB_NAME=your_database_name
 ```
 
-Make sure the required Python packages and a MySQL database are available.
+Install the required Python packages and make sure a MySQL database is available:
+
+```bash
+pip install -r requirements.txt
+alembic upgrade head
+```
 
 Run the application with:
 
@@ -265,6 +277,12 @@ python main.py
 
 The current entry point executes the asynchronous application workflow using `asyncio`.
 
+The unit tests need no MySQL database (they run on an in-memory SQLite database):
+
+```bash
+pytest
+```
+
 ## Project Highlights
 
 This project demonstrates several backend software engineering concepts:
@@ -272,8 +290,10 @@ This project demonstrates several backend software engineering concepts:
 * Python asynchronous programming
 * Layered application architecture
 * Object-oriented programming
-* Repository pattern
-* Service layer pattern
+* Repository pattern and unit of work
+* Service layer pattern with service interfaces
+* Dependency injection through a composition root
+* Domain errors
 * SQLAlchemy ORM
 * Asynchronous SQLAlchemy sessions
 * Relational database modeling
@@ -282,9 +302,10 @@ This project demonstrates several backend software engineering concepts:
 * Database transactions
 * Account balance management
 * Financial transaction processing
-* Data transfer objects
+* Data transfer objects (pydantic request and response models)
 * Pagination and filtering
 * Database migrations with Alembic
+* Unit tests on an isolated in-memory database
 
 ## Project Status
 

@@ -1,23 +1,28 @@
-from logger import logger
-from Service.UserService import UserService
-from typing import Optional, List, Any, Dict
-from database_connection import DatabaseConnection
-from Service.CustomerService import CustomerService
-from Dtos.Response.UserResponse import UserResponse
-from Dtos.Request.CustomerRequest import CustomerRequest
-from Dtos.Request.CustomerUpdateRequest import CustomerUpdateRequest
+import uuid
+from Data.Interfaces.i_unit_of_work import UnitOfWorkFactory
+from Infrastructure.Logging.logger import logger
+from typing import Any
+from Models.Dtos.Response.UserResponse import UserResponse
+from Models.Dtos.Request.CustomerRequest import CustomerRequest
+from Models.Dtos.Request.CustomerUpdateRequest import CustomerUpdateRequest
+from Services.Exceptions.domain_exceptions import ServiceError
+from Services.Interfaces.i_customer_service import ICustomerService
+
+# Placeholder for the demo calls below: replace with a real Users.Id (GUID) from your database.
+SAMPLE_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 class CustomerApplication:
-    def __init__(self):
-        self.database_connection = DatabaseConnection()
-        self.user_service = UserService(self.database_connection)
-        self.customer_service = CustomerService(self.database_connection, self.user_service)
+    def __init__(self, unit_of_work_factory: UnitOfWorkFactory, customer_service: ICustomerService):
+        self.unit_of_work_factory = unit_of_work_factory
+        self.customer_service = customer_service
 
     async def run_application(self):
-        # await self.delete_customer(8)
-        await self.get_customer_details(12)
-        # await self.add_or_update_customer_account_type(12, 1)
+        # await self.delete_customer(SAMPLE_USER_ID)
+        await self.get_customer_details(SAMPLE_USER_ID)
+        # await self.add_or_update_customer_account_type(SAMPLE_USER_ID, 1)
+        # await self.close_customer_account(SAMPLE_USER_ID, "2600000000")
+        # await self.deactivate_customer_account(SAMPLE_USER_ID)
         # customers = await self.get_all_customers()
         # if customers:
         #     for customer in customers:
@@ -25,40 +30,45 @@ class CustomerApplication:
 
     async def create_customer(self, customer_request: CustomerRequest):
         logger.info(f"Starting to create customer {customer_request.email}")
-        result = await self.customer_service.create_customer(customer_request)
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                customer = await self.customer_service.create_customer(unit_of_work, customer_request)
+        except ServiceError as error:
+            logger.warning(f"Failed to create customer: {error.message}")
+            return None
 
-        if result:
-            logger.info(f"Customer created successfully with User Id: {result}")
-        else:
-            logger.warning("Failed to create customer.")
+        logger.info(f"Customer created successfully with User Id: {customer.user_id}")
+        return customer
 
-    async def update_customer(self, user_id: int, customer_request: CustomerUpdateRequest):
+    async def update_customer(self, user_id: uuid.UUID, customer_request: CustomerUpdateRequest):
         logger.info(f"Starting the update of customer with the user id {user_id}")
-        result = await self.customer_service.update_customer(user_id, customer_request)
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                result = await self.customer_service.update_customer(unit_of_work, user_id, customer_request)
+        except ServiceError as error:
+            logger.warning(f"Failed to update customer with User ID {user_id}: {error.message}")
+            return None
 
-        if result:
-            logger.info(f"Customer with User ID {user_id} updated successfully.")
-        else:
-            logger.warning(f"Failed to update customer with User ID {user_id}.")
-
+        logger.info(f"Customer with User ID {user_id} updated successfully.")
         return result
 
-    async def delete_customer(self, user_id: int):
+    async def delete_customer(self, user_id: uuid.UUID):
         logger.info(f"Starting to delete customer with user id {user_id}")
-        result = await self.customer_service.delete_customer(user_id)
-        if result:
-            logger.info(f"Customer with user id {user_id} deleted successfully.")
-        else:
-            logger.warning(f"Failed to delete customer {user_id}.")
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                await self.customer_service.delete_customer(unit_of_work, user_id)
+        except ServiceError as error:
+            logger.warning(f"Failed to delete customer {user_id}: {error.message}")
+            return False
 
-    async def get_all_customers(self) -> None | list[Any] | list[dict[str, str | None | int | bool | Any]]:
+        logger.info(f"Customer with user id {user_id} deleted successfully.")
+        return True
+
+    async def get_all_customers(self) -> list[dict[str, Any]]:
         logger.info("Getting all customers...")
 
-        customers = await self.customer_service.get_all_customers()
-
-        if customers is None:
-            logger.error("Failed to retrieve customers.")
-            return None
+        async with self.unit_of_work_factory() as unit_of_work:
+            customers = await self.customer_service.get_all_customers(unit_of_work)
 
         if not customers:
             logger.info("No customers found.")
@@ -74,7 +84,7 @@ class CustomerApplication:
                 "address": customer.address,
                 "role_id": customer.role_id,
                 "role_name": customer.role_name,
-                "accounts": customer.accounts,
+                "accounts": [vars(account) for account in customer.accounts],
                 "active": customer.active,
                 "created_at": customer.created_at.strftime("%Y-%m-%d %H:%M:%S") if customer.created_at else None
             }
@@ -83,16 +93,18 @@ class CustomerApplication:
 
         return customer_responses
 
-    async def get_customer_details(self, user_id: int) -> UserResponse | None:
+    async def get_customer_details(self, user_id: uuid.UUID) -> UserResponse | None:
         logger.info(f"getting customer details with the user id {user_id}")
-        customer = await self.customer_service.get_customer_by_id(user_id)
-
-        if not customer:
-            logger.warning(f"Customer with User ID {user_id} not found.")
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                customer = await self.customer_service.get_customer_by_id(unit_of_work, user_id)
+        except ServiceError as error:
+            logger.warning(error.message)
             return None
 
         account_descriptions = [
-            f"{account.account_type} (Id: {account.account_type_id})"
+            f"{account.account_type} (Id: {account.account_type_id}, Number: {account.account_number}, "
+            f"Balance: {account.balance})"
             for account in customer.accounts
         ]
 
@@ -111,12 +123,39 @@ class CustomerApplication:
 
         return customer
 
-    async def add_or_update_customer_account_type(self, user_id: int, account_type_id: int):
-        success = await self.customer_service.add_or_update_account_type(user_id, account_type_id)
+    async def close_customer_account(self, user_id: uuid.UUID, account_number: str):
+        logger.info(f"Starting to close account {account_number} of customer {user_id}")
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                await self.customer_service.close_account(unit_of_work, user_id, account_number)
+        except ServiceError as error:
+            logger.warning(f"Failed to close account {account_number} of customer {user_id}: {error.message}")
+            return False
 
-        if success:
-            logger.info(f"Successfully added/updated account type {account_type_id} for user {user_id}.")
-            print(f"Account type {account_type_id} successfully added/updated for user {user_id}.")
-        else:
-            logger.error(f"Failed to add/update account type {account_type_id} for user {user_id}.")
-            print(f"Failed to update account type for user {user_id}.")
+        logger.info(f"Account {account_number} of customer {user_id} closed successfully.")
+        return True
+
+    async def deactivate_customer_account(self, user_id: uuid.UUID) -> UserResponse | None:
+        logger.info(f"Starting to deactivate customer {user_id} and the customer's accounts")
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                customer = await self.customer_service.deactivate_customer_account(unit_of_work, user_id)
+        except ServiceError as error:
+            logger.warning(f"Failed to deactivate customer {user_id}: {error.message}")
+            return None
+
+        logger.info(f"Customer {user_id} and the customer's accounts deactivated (active: {customer.active}).")
+        return customer
+
+    async def add_or_update_customer_account_type(self, user_id: uuid.UUID, account_type_id: int):
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                account = await self.customer_service.open_account(unit_of_work, user_id, account_type_id)
+        except ServiceError as error:
+            logger.error(f"Failed to add account type {account_type_id} for user {user_id}: {error.message}")
+            print(f"Failed to add account type {account_type_id} for user {user_id}.")
+            return None
+
+        logger.info(f"Successfully added account type {account_type_id} for user {user_id}.")
+        print(f"Account {account.account_number} ({account.account_type}) successfully opened for user {user_id}.")
+        return account

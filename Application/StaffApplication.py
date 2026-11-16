@@ -1,25 +1,29 @@
-from Dtos.Response.UserResponse import UserResponse
-from Service.UserService import UserService
-from logger import logger
-from Dtos.Request.StaffCreateRequest import StaffCreateRequest
-from Dtos.Request.StaffUpdateRequest import StaffUpdateRequest
-from database_connection import DatabaseConnection
-from Service.StaffService import StaffService
+import uuid
+from Data.Interfaces.i_unit_of_work import UnitOfWorkFactory
+from Models.Dtos.Response.UserResponse import UserResponse
+from Models.Entities import Role
+from Infrastructure.Logging.logger import logger
+from Models.Dtos.Request.StaffCreateRequest import StaffCreateRequest
+from Models.Dtos.Request.StaffUpdateRequest import StaffUpdateRequest
+from Services.Exceptions.domain_exceptions import ServiceError
+from Services.Interfaces.i_staff_service import IStaffService
+
+# Placeholder for the demo calls below: replace with a real Users.Id (GUID) from your database.
+SAMPLE_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 class StaffApplication:
-    def __init__(self):
-        self.database_connection = DatabaseConnection()
-        self.user_service = UserService(self.database_connection)
-        self.service = StaffService(self.database_connection, self.user_service)
+    def __init__(self, unit_of_work_factory: UnitOfWorkFactory, staff_service: IStaffService):
+        self.unit_of_work_factory = unit_of_work_factory
+        self.service = staff_service
 
     async def run_application(self):
         # await self.test_database_connection()
         # await self.get_all_staff()
-        # await self.toggle_staff_active_status(1)
-        await self.get_staff_details(3)
-        # await self.delete_staff(4)
-        
+        # await self.toggle_staff_active_status(SAMPLE_USER_ID)
+        await self.get_staff_details(SAMPLE_USER_ID)
+        # await self.delete_staff(SAMPLE_USER_ID)
+
     async def create_staff(self, last_name: str, first_name: str, email: str, position: str, password: str):
         logger.info(f"Attempting to create new staff: {last_name} {first_name}, Email: {email}, Position: {position}")
 
@@ -31,17 +35,23 @@ class StaffApplication:
             password=password
         )
 
-        new_staff = await self.service.create_staff(staff_request)
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                new_staff = await self.service.create_staff(unit_of_work, staff_request)
+        except ServiceError as error:
+            logger.warning(f"Staff was not created: {error.message}")
+            return None
 
-        if new_staff:
-            logger.info(
-                f"Successfully added staff - Id: {new_staff.user_id}, Name: {new_staff.last_name} {new_staff.first_name}, Email: {new_staff.email}, Position: {new_staff.position}")
-        else:
-            logger.warning(f"Staff with email {email} already exists or an error occurred.")
+        logger.info(
+            f"Successfully added staff - Id: {new_staff.user_id}, Staff Id: {new_staff.staff_id}, "
+            f"Name: {new_staff.last_name} {new_staff.first_name}, Email: {new_staff.email}, "
+            f"Position: {new_staff.position}")
+        return new_staff
 
     async def get_all_staff(self):
         logger.info("Fetching all staff...")
-        staff_list = await self.service.get_all_staff()
+        async with self.unit_of_work_factory() as unit_of_work:
+            staff_list = await self.service.get_all_staff(unit_of_work)
 
         if not staff_list:
             logger.warning("No staff records found.")
@@ -60,44 +70,49 @@ class StaffApplication:
             )
         print()
 
-    async def toggle_staff_active_status(self, user_id: int):
+    async def toggle_staff_active_status(self, user_id: uuid.UUID):
         logger.info(f"Toggling active status for staff with User ID: {user_id}")
 
-        success = await self.service.toggle_staff_active_status(user_id)
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                active = await self.service.toggle_staff_active_status(unit_of_work, user_id)
+        except ServiceError as error:
+            logger.warning(f"Failed to toggle active status for staff with User ID {user_id}: {error.message}")
+            return None
 
-        if success:
-            print(f"Successfully toggled active status for staff with User ID: {user_id}")
-        else:
-            logger.warning(f"Failed to toggle active status for staff with User ID: {user_id}")
+        print(f"Successfully toggled active status for staff with User ID: {user_id} (active: {active})")
+        return active
 
     async def test_database_connection(self):
         logger.info("Testing database connection...")
 
-        connection = await self.database_connection.get_connection()
-
-        if connection:
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                await unit_of_work.roles.exists_async(Role.Id > 0)
+        except Exception as error:
+            logger.error(f"Database connection failed: {error}")
+        else:
             logger.info("Database connection successful.")
-            await self.database_connection.release_connection(connection)
-        else:
-            logger.error("Database connection failed.")
 
-    async def update_staff_details(self, user_id: int, staff_request: StaffUpdateRequest):
+    async def update_staff_details(self, user_id: uuid.UUID, staff_request: StaffUpdateRequest):
         logger.info(f"Starting the update of staff with the user id {user_id}")
-        result = await self.service.update_staff(user_id, staff_request)
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                result = await self.service.update_staff(unit_of_work, user_id, staff_request)
+        except ServiceError as error:
+            logger.warning(f"Failed to update staff with User ID {user_id}: {error.message}")
+            return None
 
-        if result:
-            logger.info(f"Staff with User ID {user_id} updated successfully.")
-        else:
-            logger.warning(f"Failed to update staff with User ID {user_id}.")
-
+        logger.info(f"Staff with User ID {user_id} updated successfully.")
         return result
 
-    async def get_staff_details(self, user_id: int) -> UserResponse | None:
+    async def get_staff_details(self, user_id: uuid.UUID) -> UserResponse | None:
         logger.info(f"getting staff details with the user id {user_id}")
-        staff = await self.service.get_staff_by_id(user_id)
-
-        if not staff:
-            logger.warning(f"Staff with User ID {user_id} not found.")
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                staff = await self.service.get_staff_by_id(unit_of_work, user_id)
+        except ServiceError as error:
+            logger.warning(error.message)
             return None
 
         print(
@@ -114,10 +129,14 @@ class StaffApplication:
 
         return staff
 
-    async def delete_staff(self, user_id: int):
+    async def delete_staff(self, user_id: uuid.UUID):
         logger.info(f"Starting to delete staff with user id {user_id}")
-        result = await self.service.delete_staff(user_id)
-        if result:
-            logger.info(f"Staff {user_id} deleted successfully.")
-        else:
-            logger.warning(f"Failed to delete staff {user_id}.")
+        try:
+            async with self.unit_of_work_factory() as unit_of_work:
+                await self.service.delete_staff(unit_of_work, user_id)
+        except ServiceError as error:
+            logger.warning(f"Failed to delete staff {user_id}: {error.message}")
+            return False
+
+        logger.info(f"Staff {user_id} deleted successfully.")
+        return True
